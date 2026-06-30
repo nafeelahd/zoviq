@@ -61,7 +61,7 @@ export default function FeedPage() {
     if (!data) { setLoading(false); return }
 
     // Get profiles for all post authors
-    const userIds = [...new Set(data.map(p => p.user_id))]
+    const userIds = [...new Set(data.map(p => p.user_id))] as string[]
     const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', userIds)
     const profileMap: Record<string, any> = {}
     profiles?.forEach(p => { profileMap[p.id] = p })

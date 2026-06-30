@@ -65,7 +65,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
 
     if (!storiesData || storiesData.length === 0) { setGroupedStories([]); return }
 
-    const userIds = [...new Set(storiesData.map(s => s.user_id))]
+    const userIds = Array.from(new Set(storiesData.map(s => s.user_id))) as string[]
     const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', userIds)
     const profileMap: Record<string, any> = {}
     profiles?.forEach(p => { profileMap[p.id] = p })

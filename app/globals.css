@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; }
+
+html, body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  transition: background-color 0.2s ease;
+}
+
+:root {
+  --grad: linear-gradient(135deg, #6366F1, #EC4899);
+  --grad-hover: linear-gradient(135deg, #4F46E5, #DB2777);
+  --card: #FFFFFF;
+  --border: #F0EFF8;
+  --text: #1A1A2E;
+  --sub: #6B7280;
+  --muted: #9CA3AF;
+  --bg: #F8F7FF;
+  --input-bg: #FAFAFA;
+  --hover-bg: #F3F4F6;
+  --radius: 16px;
+}
+
+.dark {
+  --card: #1A1A2E;
+  --border: #2D2D44;
+  --text: #F1F0FF;
+  --sub: #9CA3AF;
+  --muted: #6B7280;
+  --bg: #0F0F13;
+  --input-bg: #25253B;
+  --hover-bg: #25253B;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #6366F1; border-radius: 4px; }
+
+/* Gradient text utility */
+.grad-text {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient button */
+.grad-btn {
+  background: var(--grad);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.grad-btn:hover { opacity: 0.9; }
+.grad-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Theme-aware utility classes — use these instead of hardcoded hex in components */
+.theme-bg { background-color: var(--bg) !important; }
+.theme-card { background-color: var(--card) !important; border-color: var(--border) !important; }
+.theme-text { color: var(--text) !important; }
+.theme-sub { color: var(--sub) !important; }
+.theme-muted { color: var(--muted) !important; }
+.theme-border { border-color: var(--border) !important; }
+.theme-input { background-color: var(--input-bg) !important; border-color: var(--border) !important; color: var(--text) !important; }

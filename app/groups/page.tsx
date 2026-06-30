@@ -92,7 +92,7 @@ export default function GroupsPage() {
     const supabase = createClient()
     const { data: msgs } = await supabase.from('group_messages').select('*').eq('group_id', groupId).order('created_at', { ascending: true })
     if (!msgs || msgs.length === 0) { setMessages([]); return }
-    const userIds = [...new Set(msgs.map(m => m.user_id))]
+    const userIds = Array.from(new Set(msgs.map(m => m.user_id))) as string[]
     const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', userIds)
     const profileMap: Record<string, string> = {}
     profiles?.forEach(p => { profileMap[p.id] = p.username })

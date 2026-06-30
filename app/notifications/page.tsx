@@ -22,7 +22,7 @@ export default function NotificationsPage() {
     const supabase = createClient()
     const { data } = await supabase.from('notifications').select('*').eq('user_id', uid).order('created_at', { ascending: false })
     if (!data || data.length === 0) { setNotifications([]); setLoading(false); return }
-    const actorIds = [...new Set(data.map(n => n.actor_id))]
+    const actorIds = Array.from(new Set(data.map(n => n.actor_id))) as string[]
     const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', actorIds)
     const usernameMap: Record<string, string> = {}
     profiles?.forEach(p => { usernameMap[p.id] = p.username })

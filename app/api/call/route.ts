@@ -8,9 +8,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Daily API key not configured' }, { status: 500 })
   }
 
+  // Sanitize room name — Daily only allows alphanumeric and hyphens
+  const sanitizedName = roomName.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()
+
   try {
     // First try to get existing room
-    const getResponse = await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
+    const getResponse = await fetch(`https://api.daily.co/v1/rooms/${sanitizedName}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     })
 
@@ -27,21 +30,26 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        name: roomName,
+        name: sanitizedName,
         properties: {
-          exp: Math.floor(Date.now() / 1000) + 3600,
-          enable_chat: false,
+          exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
           enable_screenshare: true,
+          enable_chat: false,
           start_video_off: false,
           start_audio_off: false,
+          lang: 'en',
         },
       }),
     })
 
     const room = await response.json()
-    if (!room.url) return NextResponse.json({ error: 'Failed to create room' }, { status: 500 })
+    if (!room.url) {
+      console.error('Daily room creation failed:', room)
+      return NextResponse.json({ error: room.error || 'Failed to create room' }, { status: 500 })
+    }
     return NextResponse.json({ url: room.url })
-  } catch (error) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  } catch (error: any) {
+    console.error('Call API error:', error)
+    return NextResponse.json({ error: 'Server error: ' + error.message }, { status: 500 })
   }
 }

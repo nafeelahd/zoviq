@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import CallModal from '@/components/CallModal'
@@ -23,9 +23,9 @@ export default function MessagesPage() {
   const [incomingCall, setIncomingCall] = useState<{ callerName: string; callType: 'video' | 'audio'; roomUrl: string; notifId: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
-  const selectedUserRef = useRef<Profile | null>(null)
+  const msgPollRef = useRef<NodeJS.Timeout | null>(null)
   const userIdRef = useRef('')
-  const channelRef = useRef<any>(null)
+  const selectedUserRef = useRef<Profile | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -35,11 +35,12 @@ export default function MessagesPage() {
       setUserId(uid)
       userIdRef.current = uid
       fetchPeople(uid)
+      // Poll for incoming calls every 3s
       pollRef.current = setInterval(() => checkIncomingCalls(uid), 3000)
     })
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
-      if (channelRef.current) channelRef.current.unsubscribe()
+      if (msgPollRef.current) clearInterval(msgPollRef.current)
     }
   }, [])
 
@@ -49,78 +50,24 @@ export default function MessagesPage() {
 
   useEffect(() => {
     selectedUserRef.current = selectedUser
-    if (!selectedUser || !userId) return
+    // Clear old message polling
+    if (msgPollRef.current) clearInterval(msgPollRef.current)
+    if (!selectedUser || !userIdRef.current) return
 
-    // Fetch messages immediately
-    fetchMessages(userId, selectedUser.id)
+    // Fetch immediately
+    fetchMessages(userIdRef.current, selectedUser.id)
 
-    // Clean up previous channel
-    if (channelRef.current) {
-      channelRef.current.unsubscribe()
-      channelRef.current = null
-    }
-
-    // Set up real-time subscription
-    const supabase = createClient()
-    const channel = supabase
-      .channel(`messages-${userId}-${selectedUser.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-      }, (payload: any) => {
-        const msg = payload.new as Message
-        const currentUser = userIdRef.current
-        const currentSelected = selectedUserRef.current
-        // Only add if it's relevant to this conversation
-        if (
-          (msg.sender_id === currentUser && msg.receiver_id === currentSelected?.id) ||
-          (msg.sender_id === currentSelected?.id && msg.receiver_id === currentUser)
-        ) {
-          setMessages(prev => {
-            // Avoid duplicates
-            if (prev.find(m => m.id === msg.id)) return prev
-            return [...prev, msg]
-          })
-          // Mark as read if received
-          if (msg.sender_id === currentSelected?.id) {
-            supabase.from('messages').update({ read: true }).eq('id', msg.id).then(() => {})
-          }
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }
-      })
-      .subscribe()
-
-    channelRef.current = channel
-  }, [selectedUser, userId])
-
-  const checkIncomingCalls = async (uid: string) => {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', uid)
-      .in('type', ['video_call', 'audio_call'])
-      .eq('read', false)
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (data && data.length > 0 && !incomingCall && !callType) {
-      const notif = data[0]
-      const { data: profile } = await supabase.from('profiles').select('username').eq('id', notif.actor_id).single()
-      const type = notif.type === 'video_call' ? 'video' : 'audio'
-      const roomName = notif.call_room || `dm-${[uid, notif.actor_id].sort().join('-')}`
-      const res = await fetch('/api/call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomName })
-      })
-      const roomData = await res.json()
-      if (roomData.url) {
-        setIncomingCall({ callerName: profile?.username || 'Someone', callType: type, roomUrl: roomData.url, notifId: notif.id })
+    // Poll every 2 seconds for new messages
+    msgPollRef.current = setInterval(() => {
+      if (selectedUserRef.current && userIdRef.current) {
+        fetchMessages(userIdRef.current, selectedUserRef.current.id)
       }
+    }, 2000)
+
+    return () => {
+      if (msgPollRef.current) clearInterval(msgPollRef.current)
     }
-  }
+  }, [selectedUser])
 
   const fetchPeople = async (uid: string) => {
     const supabase = createClient()
@@ -136,9 +83,16 @@ export default function MessagesPage() {
       .select('*')
       .or(`and(sender_id.eq.${uid},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${uid})`)
       .order('created_at', { ascending: true })
-    setMessages(data || [])
-    // Mark received messages as read
-    await supabase.from('messages').update({ read: true }).eq('sender_id', otherId).eq('receiver_id', uid).eq('read', false)
+    if (data) {
+      setMessages(prev => {
+        // Only update if messages changed
+        if (JSON.stringify(prev.map(m => m.id)) === JSON.stringify(data.map((m: Message) => m.id))) return prev
+        return data
+      })
+    }
+    // Mark as read
+    await supabase.from('messages').update({ read: true })
+      .eq('sender_id', otherId).eq('receiver_id', uid).eq('read', false)
   }
 
   const sendMessage = async () => {
@@ -155,13 +109,39 @@ export default function MessagesPage() {
       .single()
 
     if (!error && inserted) {
-      // Add to local state immediately for instant feedback
       setMessages(prev => [...prev, inserted])
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      // Send notification
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
       await supabase.from('notifications').insert({ user_id: selectedUser.id, actor_id: userId, type: 'message' })
+    } else {
+      setNewMessage(text) // restore if failed
     }
     setSending(false)
+  }
+
+  const checkIncomingCalls = async (uid: string) => {
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', uid)
+        .in('type', ['video_call', 'audio_call'])
+        .eq('read', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (data && data.length > 0 && !incomingCall && !callType) {
+        const notif = data[0]
+        const { data: profile } = await supabase.from('profiles').select('username').eq('id', notif.actor_id).single()
+        const type = notif.type === 'video_call' ? 'video' : 'audio'
+        const roomName = notif.call_room || `dm-${[uid, notif.actor_id].sort().join('-')}`
+        const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
+        const roomData = await res.json()
+        if (roomData.url) {
+          setIncomingCall({ callerName: profile?.username || 'Someone', callType: type, roomUrl: roomData.url, notifId: notif.id })
+        }
+      }
+    } catch {}
   }
 
   const startCall = async (type: 'video' | 'audio') => {
@@ -169,30 +149,15 @@ export default function MessagesPage() {
     setStartingCall(true)
     try {
       const roomName = `dm-${[userId, selectedUser.id].sort().join('-')}`
-      const res = await fetch('/api/call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomName })
-      })
+      const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
       const data = await res.json()
       if (data.url) {
         setRoomUrl(data.url)
         setCallType(type)
         const supabase = createClient()
-        await supabase.from('notifications').insert({
-          user_id: selectedUser.id,
-          actor_id: userId,
-          type: type === 'video' ? 'video_call' : 'audio_call',
-          call_room: roomName,
-          read: false,
-        })
-      } else {
-        alert('Could not start call. Please check your Daily.co API key.')
+        await supabase.from('notifications').insert({ user_id: selectedUser.id, actor_id: userId, type: type === 'video' ? 'video_call' : 'audio_call', call_room: roomName, read: false })
       }
-    } catch (e) {
-      console.error('Call error:', e)
-      alert('Call failed. Please try again.')
-    }
+    } catch (e) { console.error(e) }
     setStartingCall(false)
   }
 
@@ -200,9 +165,7 @@ export default function MessagesPage() {
     if (!incomingCall) return
     const supabase = createClient()
     await supabase.from('notifications').update({ read: true }).eq('id', incomingCall.notifId)
-    setRoomUrl(incomingCall.roomUrl)
-    setCallType(incomingCall.callType)
-    setIncomingCall(null)
+    setRoomUrl(incomingCall.roomUrl); setCallType(incomingCall.callType); setIncomingCall(null)
   }
 
   const declineCall = async () => {
@@ -230,41 +193,26 @@ export default function MessagesPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <Navbar activePage="messages" />
-
-      {incomingCall && !callType && (
-        <IncomingCall callerName={incomingCall.callerName} callType={incomingCall.callType} onAccept={acceptCall} onDecline={declineCall} />
-      )}
-      {callType && roomUrl && (
-        <CallModal roomUrl={roomUrl} callType={callType} callerName={selectedUser?.username || 'User'} onLeave={() => { setCallType(null); setRoomUrl('') }} />
-      )}
+      {incomingCall && !callType && <IncomingCall callerName={incomingCall.callerName} callType={incomingCall.callType} onAccept={acceptCall} onDecline={declineCall} />}
+      {callType && roomUrl && <CallModal roomUrl={roomUrl} callType={callType} callerName={selectedUser?.username || 'User'} onLeave={() => { setCallType(null); setRoomUrl('') }} />}
 
       <main className="max-w-4xl mx-auto py-6 px-4">
         <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: 'var(--card)', borderColor: 'var(--border)', height: '78vh' }}>
           <div className="flex h-full">
-
-            {/* Left sidebar */}
+            {/* Sidebar */}
             <div className="w-72 flex flex-col flex-shrink-0 border-r" style={{ borderColor: 'var(--border)' }}>
               <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
                 <h2 className="font-bold text-base" style={{ color: 'var(--text)' }}>Messages</h2>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {loading ? (
-                  <div className="flex items-center justify-center h-32">
-                    <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                  </div>
+                  <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" /></div>
                 ) : people.length === 0 ? (
-                  <div className="text-center p-8" style={{ color: 'var(--muted)' }}>
-                    <p className="text-2xl mb-2">👥</p>
-                    <p className="text-xs">No users yet</p>
-                  </div>
+                  <div className="text-center p-8" style={{ color: 'var(--muted)' }}><p className="text-2xl mb-2">👥</p><p className="text-xs">No users yet</p></div>
                 ) : people.map(person => (
                   <button key={person.id} onClick={() => setSelectedUser(person)}
                     className="w-full flex items-center gap-3 px-4 py-3.5 transition text-left border-b"
-                    style={{
-                      background: selectedUser?.id === person.id ? '#EEF2FF' : 'transparent',
-                      borderColor: 'var(--border)',
-                      borderLeft: selectedUser?.id === person.id ? '3px solid #6366F1' : '3px solid transparent'
-                    }}>
+                    style={{ background: selectedUser?.id === person.id ? '#EEF2FF' : 'transparent', borderColor: 'var(--border)', borderLeft: selectedUser?.id === person.id ? '3px solid #6366F1' : '3px solid transparent' }}>
                     <Avatar person={person} size={10} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{person.username}</p>
@@ -275,11 +223,10 @@ export default function MessagesPage() {
               </div>
             </div>
 
-            {/* Chat area */}
+            {/* Chat */}
             <div className="flex-1 flex flex-col min-w-0">
               {selectedUser ? (
                 <>
-                  {/* Header */}
                   <div className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: 'var(--border)' }}>
                     <div className="flex items-center gap-3">
                       <Avatar person={selectedUser} size={9} />
@@ -291,18 +238,13 @@ export default function MessagesPage() {
                     <div className="flex items-center gap-2">
                       <button onClick={() => startCall('audio')} disabled={startingCall}
                         className="w-9 h-9 rounded-xl flex items-center justify-center transition hover:scale-105 disabled:opacity-40"
-                        style={{ background: '#F0FDF4' }} title="Audio call">
-                        <span className="text-lg">📞</span>
-                      </button>
+                        style={{ background: '#F0FDF4' }}>📞</button>
                       <button onClick={() => startCall('video')} disabled={startingCall}
                         className="w-9 h-9 rounded-xl flex items-center justify-center transition hover:scale-105 disabled:opacity-40"
-                        style={{ background: '#EEF2FF' }} title="Video call">
-                        <span className="text-lg">📹</span>
-                      </button>
+                        style={{ background: '#EEF2FF' }}>📹</button>
                     </div>
                   </div>
 
-                  {/* Messages */}
                   <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center">
@@ -316,9 +258,7 @@ export default function MessagesPage() {
                           {!isMe && <Avatar person={selectedUser} size={7} />}
                           <div className="max-w-xs">
                             <div className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
-                              style={isMe
-                                ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' }
-                                : { background: 'var(--hover-bg)', color: 'var(--text)' }}>
+                              style={isMe ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' } : { background: 'var(--hover-bg)', color: 'var(--text)' }}>
                               <p>{msg.content}</p>
                             </div>
                             <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -332,12 +272,11 @@ export default function MessagesPage() {
                     <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Input */}
                   <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
                     <div className="flex gap-3 items-center">
                       <input type="text" value={newMessage}
                         onChange={e => setNewMessage(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
                         placeholder={`Message ${selectedUser.username}...`}
                         className="flex-1 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
                         style={{ background: 'var(--input-bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
@@ -351,8 +290,7 @@ export default function MessagesPage() {
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                  <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg"
-                    style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
+                  <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                     <span className="text-3xl">💬</span>
                   </div>
                   <h3 className="font-bold text-base mb-1" style={{ color: 'var(--text)' }}>Your Messages</h3>

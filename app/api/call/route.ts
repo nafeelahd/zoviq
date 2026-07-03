@@ -8,48 +8,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Daily API key not configured' }, { status: 500 })
   }
 
-  // Sanitize room name — Daily only allows alphanumeric and hyphens
-  const sanitizedName = roomName.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()
+  // Sanitize - Daily only allows lowercase alphanumeric and hyphens, max 40 chars
+  const sanitized = roomName
+    .replace(/[^a-zA-Z0-9-]/g, '-')
+    .toLowerCase()
+    .slice(0, 40)
 
   try {
-    // First try to get existing room
-    const getResponse = await fetch(`https://api.daily.co/v1/rooms/${sanitizedName}`, {
+    // Always try to get existing room first
+    const getRes = await fetch(`https://api.daily.co/v1/rooms/${sanitized}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     })
 
-    if (getResponse.ok) {
-      const room = await getResponse.json()
-      return NextResponse.json({ url: room.url })
+    if (getRes.ok) {
+      const room = await getRes.json()
+      console.log('Using existing room:', room.url)
+      return NextResponse.json({ url: room.url, roomName: sanitized })
     }
 
-    // Create new room
-    const response = await fetch('https://api.daily.co/v1/rooms', {
+    // Create room with 2 hour expiry
+    const createRes = await fetch('https://api.daily.co/v1/rooms', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        name: sanitizedName,
+        name: sanitized,
         properties: {
-          exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+          exp: Math.floor(Date.now() / 1000) + 7200,
+          max_participants: 10,
           enable_screenshare: true,
           enable_chat: false,
           start_video_off: false,
           start_audio_off: false,
-          lang: 'en',
+          enable_knocking: false,
         },
       }),
     })
 
-    const room = await response.json()
+    const room = await createRes.json()
+    console.log('Created room:', room)
+
     if (!room.url) {
-      console.error('Daily room creation failed:', room)
-      return NextResponse.json({ error: room.error || 'Failed to create room' }, { status: 500 })
+      return NextResponse.json({ error: room.error || 'Room creation failed' }, { status: 500 })
     }
-    return NextResponse.json({ url: room.url })
-  } catch (error: any) {
-    console.error('Call API error:', error)
-    return NextResponse.json({ error: 'Server error: ' + error.message }, { status: 500 })
+
+    return NextResponse.json({ url: room.url, roomName: sanitized })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

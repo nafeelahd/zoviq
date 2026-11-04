@@ -1,63 +1,238 @@
-# SocialApp — Next.js + Supabase
+<div align="center">
 
-A social media app built feature by feature.
+# Zoviq
 
-## What's built so far
-- User sign up (email + password + username)
-- Email confirmation flow
-- User login
-- Protected routes (middleware)
-- Auto-redirect logged-in users away from auth pages
-- Feed page (placeholder, ready for posts)
+**Your world. Your moment.**
 
-## Project structure
+A full-stack social media app with posts, stories, chat, groups and audio/video calls.
+Built with Next.js, Supabase and Daily.co.
+
+![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38BDF8?logo=tailwindcss&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?logo=supabase&logoColor=white)
+![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)
+
+**[Live demo](https://your-app.vercel.app)** (replace with your Vercel URL)
+
+</div>
+
+---
+
+## Screenshots
+
+> Add screenshots here, for example `docs/feed.png`, `docs/chat.png`, `docs/groups.png`.
+
+---
+
+## Features
+
+**Accounts**
+- Sign up, log in and log out with email and password
+- Forgot password and reset password by email
+- Change password and delete account from Settings
+- Edit profile: username, bio and profile picture
+
+**Feed**
+- Text, photo and video posts
+- Likes and comments
+- Share posts and profiles (copy link, WhatsApp, X, Facebook, Telegram, native share)
+- Search posts and people with highlighted matches
+
+**Stories**
+- Photo and video stories that expire after 24 hours
+- All of a user's stories are grouped under one avatar
+- Tap to move forward or back, view tracking, delete your own stories
+
+**People**
+- Follow and unfollow, follower and following counts
+
+**Messaging**
+- One-to-one direct messages with read receipts
+- Instant UI update when you send a message
+
+**Groups**
+- Public groups (anyone can join) and private groups (admin approves requests)
+- Admin can add, remove and approve members and delete the group
+- Group chat
+
+**Calls**
+- Audio and video calls in direct messages and groups, powered by Daily.co
+- Incoming call screen with accept and decline
+- Mute, camera toggle, end call, and a mic/camera permission step before joining
+
+**Notifications**
+- Likes, comments, follows, messages, group activity and calls
+- Unread badges on the navbar and clickable notifications that open the right page
+
+**App experience**
+- Light and dark mode that apply to the whole app
+- Glass-style navbar with a bottom tab bar on phones
+- Installable as a PWA (Add to Home Screen on Android and iOS)
+
+---
+
+## Tech stack
+
+| Area | Technology |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS and CSS variables |
+| Auth, database, storage | Supabase |
+| Calls | Daily.co (`@daily-co/daily-js`) |
+| Hosting | Vercel |
+
+---
+
+## Getting started
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/nafeelahd/zoviq.git
+cd zoviq
+npm install
 ```
-app/
-  auth/
-    login/page.tsx       ← Login page
-    signup/page.tsx      ← Sign up page
-    callback/route.ts    ← Email confirmation handler
-  feed/page.tsx          ← Protected feed (after login)
-  layout.tsx
-  page.tsx               ← Redirects to /auth/login
-lib/
-  supabase/
-    client.ts            ← Browser Supabase client
-    server.ts            ← Server Supabase client
-middleware.ts            ← Auth route protection
-supabase-setup.sql       ← Run this in Supabase SQL editor
-```
 
-## Setup (5 steps)
+### 2. Create a Supabase project
 
-### 1. Create a Supabase project
-Go to https://supabase.com → New project → note your URL and anon key
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Create the database tables listed under [Database](#database).
+3. Go to **Storage**, create a **public** bucket named `posts`, and add policies that allow signed-in users to upload and everyone to read.
+4. Go to **Authentication > Providers > Email**. Turn **Confirm email** off while developing, or set up custom SMTP so confirmation emails are delivered.
 
-### 2. Run the SQL setup
-Supabase dashboard → SQL Editor → paste contents of `supabase-setup.sql` → Run
+### 3. Create a Daily.co account
 
-### 3. Enable email auth
-Supabase dashboard → Authentication → Providers → Email → make sure it's enabled
+1. Sign up at [daily.co](https://www.daily.co) and choose **Daily Video**.
+2. Copy your API key from **Developers > API Keys**.
 
 ### 4. Add environment variables
-```bash
-cp .env.local.example .env.local
-```
-Then fill in your Supabase URL and anon key from the Supabase dashboard → Settings → API
 
-### 5. Install and run
+Create a `.env.local` file in the project root:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_DAILY_API_KEY=your_daily_api_key
+```
+
+Never commit `.env.local`. It is already listed in `.gitignore`.
+
+### 5. Run it
+
 ```bash
-npm install
 npm run dev
 ```
 
-Open http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000).
 
-## Next features to build
-- [ ] User profiles page
-- [ ] Create post
-- [ ] Feed with posts
-- [ ] Like & comment
-- [ ] Follow / unfollow
-- [ ] Notifications
-- [ ] Direct messages
+---
+
+## Database
+
+Tables used by the app:
+
+| Table | Purpose |
+|---|---|
+| `profiles` | `id`, `username`, `bio`, `avatar_url`, `last_seen`, `is_online` |
+| `posts` | `user_id`, `content`, `image_url`, `video_url` |
+| `likes` | `user_id`, `post_id` (unique pair) |
+| `comments` | `user_id`, `post_id`, `content` |
+| `follows` | `follower_id`, `following_id` (unique pair) |
+| `messages` | `sender_id`, `receiver_id`, `content`, `read` |
+| `notifications` | `user_id`, `actor_id`, `type`, `post_id`, `group_id`, `call_room`, `read` |
+| `stories` | `user_id`, `image_url`, `video_url`, `expires_at` |
+| `story_views` | `story_id`, `viewer_id` (unique pair) |
+| `groups` | `name`, `description`, `image_url`, `created_by`, `privacy` |
+| `group_members` | `group_id`, `user_id`, `role` |
+| `group_requests` | `group_id`, `user_id`, `status` |
+| `group_messages` | `group_id`, `user_id`, `content` |
+
+Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up.
+
+---
+
+## Project structure
+
+```
+app/
+  api/call/route.ts        Creates Daily.co rooms
+  auth/                    login, signup, forgot-password, reset-password, callback
+  feed/                    Home feed with stories and posts
+  profile/                 Profile and edit profile
+  people/                  Discover and follow people
+  search/                  Search posts and people
+  notifications/           Notification list
+  messages/                Direct messages and calls
+  groups/                  Groups, group chat and group calls
+  settings/change-password/
+  globals.css              Design tokens, animations, dark mode
+  layout.tsx               Root layout and PWA setup
+components/
+  Navbar.tsx               Top bar, bottom tab bar, settings menu
+  Stories.tsx              Story row and viewer
+  ShareModal.tsx           Share sheet
+  VideoEditor.tsx          Video preview and trim-point selector
+  CallModal.tsx            Active call screen
+  IncomingCall.tsx         Incoming call screen
+lib/
+  supabase/client.ts       Browser Supabase client
+  supabase/server.ts       Server Supabase client
+  useTheme.ts              Light and dark mode hook
+public/
+  manifest.json, sw.js, icon-192.png, icon-512.png    PWA files
+```
+
+---
+
+## Deploying to Vercel
+
+1. Push the project to GitHub.
+2. Import the repository at [vercel.com](https://vercel.com).
+3. Add the three environment variables from `.env.local` before deploying.
+4. Deploy.
+5. In Supabase, go to **Authentication > URL Configuration**. Set the **Site URL** to your Vercel URL and add `https://your-app.vercel.app/auth/callback` and `https://your-app.vercel.app/auth/reset-password` to the **Redirect URLs**.
+
+Vercel runs a strict TypeScript build, so run `npm run build` locally first to catch type errors before you push.
+
+---
+
+## Install as an app (PWA)
+
+**Android (Chrome):** open the site, tap the menu (three dots), then **Add to Home screen**.
+
+**iPhone (Safari):** open the site, tap **Share**, then **Add to Home Screen**.
+
+---
+
+## Known limitations
+
+- Chat messages and navbar badges refresh by polling (messages every 2 seconds, badges every 10 seconds) rather than by live push.
+- Incoming calls are detected on the Messages page, so the other person sees the ringing screen only while that page is open.
+- The video editor lets you pick trim points, but the uploaded file is not cut yet.
+- Delete account removes the user's data and signs them out. Removing the auth user itself needs a server-side admin call.
+- Some Row Level Security policies for groups, stories and notifications are open so development is easy. Tighten them before real users sign up.
+- Calls use the Daily API key from `NEXT_PUBLIC_DAILY_API_KEY`. For production, rename it to `DAILY_API_KEY` in `app/api/call/route.ts` and in Vercel so it never reaches the browser.
+
+---
+
+## Roadmap
+
+- [ ] Last seen and online or offline status
+- [ ] Typing indicators
+- [ ] Image messages in chat
+- [ ] Real video trimming
+- [ ] Push notifications
+- [ ] Restyled auth pages and popups to match the new design
+- [ ] Android APK build
+
+---
+
+## Author
+
+Built by [@nafeelahd](https://github.com/nafeelahd).
+
+## License
+
+MIT. Change this if you prefer a different license.

@@ -1,71 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-* { box-sizing: border-box; }
-
-html, body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: var(--bg);
-  transition: background-color 0.2s ease;
-}
-
 :root {
   --grad: linear-gradient(135deg, #6366F1, #EC4899);
-  --grad-hover: linear-gradient(135deg, #4F46E5, #DB2777);
-  --card: #FFFFFF;
-  --border: #F0EFF8;
-  --text: #1A1A2E;
-  --sub: #6B7280;
-  --muted: #9CA3AF;
-  --bg: #F8F7FF;
-  --input-bg: #FAFAFA;
-  --hover-bg: #F3F4F6;
-  --radius: 16px;
+  --bg: #F6F5FF;
+  --card: rgba(255, 255, 255, 0.86);
+  --surface-solid: #FFFFFF;
+  --border: rgba(99, 102, 241, 0.12);
+  --text: #14142B;
+  --sub: #5B5B7B;
+  --muted: #9A9AB8;
+  --input-bg: rgba(255, 255, 255, 0.75);
+  --hover-bg: #EEF0FF;
+  --pill-bg: rgba(99, 102, 241, 0.08);
+  --nav-bg: rgba(255, 255, 255, 0.72);
+  --shadow: 0 1px 2px rgba(20, 20, 43, 0.04), 0 8px 24px rgba(99, 102, 241, 0.08);
+  --shadow-hover: 0 2px 6px rgba(20, 20, 43, 0.06), 0 18px 44px rgba(99, 102, 241, 0.18);
+  --mesh:
+    radial-gradient(900px 520px at 8% -8%, rgba(99, 102, 241, 0.16), transparent 60%),
+    radial-gradient(760px 480px at 100% 4%, rgba(236, 72, 153, 0.12), transparent 55%),
+    radial-gradient(700px 500px at 50% 112%, rgba(56, 189, 248, 0.10), transparent 60%);
 }
 
 .dark {
-  --card: #1A1A2E;
-  --border: #2D2D44;
+  --bg: #0B0B14;
+  --card: rgba(26, 26, 46, 0.72);
+  --surface-solid: #17172A;
+  --border: rgba(255, 255, 255, 0.08);
   --text: #F1F0FF;
-  --sub: #9CA3AF;
-  --muted: #6B7280;
-  --bg: #0F0F13;
-  --input-bg: #25253B;
+  --sub: #A5A5C4;
+  --muted: #6F6F8F;
+  --input-bg: rgba(37, 37, 59, 0.8);
   --hover-bg: #25253B;
+  --pill-bg: rgba(255, 255, 255, 0.06);
+  --nav-bg: rgba(14, 14, 24, 0.72);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.4), 0 20px 50px rgba(99, 102, 241, 0.22);
+  --mesh:
+    radial-gradient(900px 520px at 8% -8%, rgba(99, 102, 241, 0.24), transparent 60%),
+    radial-gradient(760px 480px at 100% 4%, rgba(236, 72, 153, 0.16), transparent 55%);
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; }
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--text);
+  background-color: var(--bg);
+  background-image: var(--mesh);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+::selection { background: rgba(99, 102, 241, 0.25); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #6366F1; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.35); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #6366F1; }
 
-/* Gradient text utility */
-.grad-text {
-  background: var(--grad);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* Page wrappers become transparent so the soft gradient background shows through */
+div.min-h-screen[style*="var(--bg)"] { background: transparent !important; }
+
+/* Every card: glass look, soft shadow, smooth transitions */
+[style*="var(--card)"] {
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  box-shadow: var(--shadow);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background-color 0.3s ease;
+}
+.space-y-4 > [style*="var(--card)"]:hover,
+.space-y-3 > [style*="var(--card)"]:hover,
+.space-y-2 > [style*="var(--card)"]:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
 }
 
-/* Gradient button */
-.grad-btn {
-  background: var(--grad);
-  color: white;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.2s;
+/* Smooth buttons and links */
+button, a { transition: transform 0.15s ease, opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease; }
+button:not(:disabled):active { transform: scale(0.96); }
+button[style*="linear-gradient"]:not(:disabled):hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 22px rgba(99, 102, 241, 0.35);
 }
-.grad-btn:hover { opacity: 0.9; }
+
+/* Inputs */
+input, textarea { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+input:focus, textarea:focus { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.16); }
+:focus-visible { outline: 2px solid #6366F1; outline-offset: 2px; }
+
+/* Entrance animations */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.94) translateY(-6px); } to { opacity: 1; transform: none; } }
+
+main > * { animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+main > *:nth-child(2) { animation-delay: 0.06s; }
+main > *:nth-child(3) { animation-delay: 0.12s; }
+main > *:nth-child(4) { animation-delay: 0.18s; }
+main > *:nth-child(n + 5) { animation-delay: 0.22s; }
+.space-y-4 > *, .space-y-3 > *, .space-y-2 > *, .space-y-1\.5 > * {
+  animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* Gradient helpers */
+.grad-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.grad-btn { background: var(--grad); color: white; border: none; cursor: pointer; }
 .grad-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Theme-aware utility classes — use these instead of hardcoded hex in components */
-.theme-bg { background-color: var(--bg) !important; }
-.theme-card { background-color: var(--card) !important; border-color: var(--border) !important; }
-.theme-text { color: var(--text) !important; }
-.theme-sub { color: var(--sub) !important; }
-.theme-muted { color: var(--muted) !important; }
-.theme-border { border-color: var(--border) !important; }
-.theme-input { background-color: var(--input-bg) !important; border-color: var(--border) !important; color: var(--text) !important; }
+/* Navbar */
+.glass-nav {
+  background: var(--nav-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+}
+.glass-nav-bottom {
+  background: var(--nav-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border-top: 1px solid var(--border);
+}
+.icon-btn {
+  width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px; color: var(--sub); position: relative; background: transparent; border: none; cursor: pointer;
+}
+.icon-btn:hover { background: var(--hover-bg); color: #6366F1; }
+.nav-pill {
+  display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 40px;
+  border-radius: 12px; position: relative; color: var(--sub);
+}
+.nav-pill:hover { color: #6366F1; background: var(--hover-bg); }
+.nav-pill.active { color: #fff; background: var(--grad); box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35); }
+.tab-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 10px; font-weight: 600; color: var(--muted); position: relative; padding: 8px 0 6px;
+}
+.tab-item.active { color: #6366F1; }
+.tab-item.active::before {
+  content: ''; position: absolute; top: -1px; width: 30px; height: 3px; border-radius: 0 0 6px 6px; background: var(--grad);
+}
+.dropdown { animation: pop 0.18s ease-out; transform-origin: top right; }
+.menu-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 500;
+  color: var(--text); text-align: left; background: transparent; border: none; cursor: pointer;
+}
+.menu-item:hover { background: var(--hover-bg); }
+.menu-item.danger { color: #EF4444; }
+.menu-item.danger:hover { background: rgba(239, 68, 68, 0.08); }
+
+@media (max-width: 767px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

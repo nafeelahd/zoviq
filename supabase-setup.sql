@@ -1,13 +1,26 @@
 -- Run this in your Supabase SQL editor (Dashboard → SQL Editor)
 
 -- Profiles table (extends Supabase auth.users)
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   username text unique not null,
   bio text,
   avatar_url text,
+  last_seen timestamp with time zone,
   created_at timestamp with time zone default now()
 );
+
+alter table public.profiles
+  add column if not exists last_seen timestamp with time zone;
+
+-- Run this setup again after creating the messages table to add image attachments.
+do $$
+begin
+  if to_regclass('public.messages') is not null then
+    alter table public.messages add column if not exists image_url text;
+  end if;
+end;
+$$;
 
 -- Auto-create profile when a user signs up
 create or replace function public.handle_new_user()
@@ -22,6 +35,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
@@ -30,9 +44,11 @@ create trigger on_auth_user_created
 alter table public.profiles enable row level security;
 
 -- Allow users to read all profiles
+drop policy if exists "Profiles are viewable by everyone" on profiles;
 create policy "Profiles are viewable by everyone"
   on profiles for select using (true);
 
 -- Allow users to update only their own profile
+drop policy if exists "Users can update their own profile" on profiles;
 create policy "Users can update their own profile"
   on profiles for update using (auth.uid() = id);

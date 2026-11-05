@@ -45,6 +45,9 @@ Built with Next.js, Supabase and Daily.co.
 **Messaging**
 - One-to-one direct messages with read receipts
 - Instant UI update when you send a message
+- Online status and last-seen timestamps
+- Live typing indicators
+- Image attachments in direct messages
 
 **Groups**
 - Public groups (anyone can join) and private groups (admin approves requests)
@@ -131,12 +134,12 @@ Tables used by the app:
 
 | Table | Purpose |
 |---|---|
-| `profiles` | `id`, `username`, `bio`, `avatar_url`, `last_seen`, `is_online` |
+| `profiles` | `id`, `username`, `bio`, `avatar_url`, `last_seen` |
 | `posts` | `user_id`, `content`, `image_url`, `video_url` |
 | `likes` | `user_id`, `post_id` (unique pair) |
 | `comments` | `user_id`, `post_id`, `content` |
 | `follows` | `follower_id`, `following_id` (unique pair) |
-| `messages` | `sender_id`, `receiver_id`, `content`, `read` |
+| `messages` | `sender_id`, `receiver_id`, `content`, `image_url`, `read` |
 | `notifications` | `user_id`, `actor_id`, `type`, `post_id`, `group_id`, `call_room`, `read` |
 | `stories` | `user_id`, `image_url`, `video_url`, `expires_at` |
 | `story_views` | `story_id`, `viewer_id` (unique pair) |
@@ -145,7 +148,7 @@ Tables used by the app:
 | `group_requests` | `group_id`, `user_id`, `status` |
 | `group_messages` | `group_id`, `user_id`, `content` |
 
-Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up.
+Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` table, run the setup SQL again to add `last_seen` and the `image_url` attachment column to existing tables.
 
 ---
 
@@ -215,9 +218,6 @@ Vercel runs a strict TypeScript build, so run `npm run build` locally first to c
 
 ## Roadmap
 
-- [ ] Last seen and online or offline status
-- [ ] Typing indicators
-- [ ] Image messages in chat
 - [ ] Real video trimming
 - [ ] Push notifications
 - [ ] Restyled auth pages and popups to match the new design
@@ -228,5 +228,3 @@ Vercel runs a strict TypeScript build, so run `npm run build` locally first to c
 ## Author
 
 Built by [@nafeelahd](https://github.com/nafeelahd).
-
-

@@ -52,6 +52,7 @@ export default function Navbar({ activePage }: NavbarProps) {
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const presenceIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -69,8 +70,19 @@ export default function Navbar({ activePage }: NavbarProps) {
       const uid = data.session.user.id
       fetchCounts(uid)
       intervalRef.current = setInterval(() => fetchCounts(uid), 10000)
+      const updatePresence = async () => {
+        const { error } = await supabase.from('profiles')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', uid)
+        if (error) console.error('Could not update last seen:', error)
+      }
+      updatePresence()
+      presenceIntervalRef.current = setInterval(updatePresence, 30000)
     })
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current)
+    }
   }, [])
 
   const fetchCounts = async (uid: string) => {

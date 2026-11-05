@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import CallModal from '@/components/CallModal'
 import IncomingCall from '@/components/IncomingCall'
 
-type Profile = { id: string; username: string; avatar_url: string | null }
-type Message = { id: string; sender_id: string; receiver_id: string; content: string; read: boolean; created_at: string }
+type Profile = { id: string; username: string; avatar_url: string | null; last_seen: string | null }
+type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; read: boolean; created_at: string }
 
 export default function MessagesPage() {
   const [userId, setUserId] = useState('')
@@ -15,6 +16,9 @@ export default function MessagesPage() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [messageError, setMessageError] = useState('')
+  const [otherTyping, setOtherTyping] = useState(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [callType, setCallType] = useState<'video' | 'audio' | null>(null)
@@ -27,11 +31,16 @@ export default function MessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const msgPollRef = useRef<NodeJS.Timeout | null>(null)
+  const peoplePollRef = useRef<NodeJS.Timeout | null>(null)
   const userIdRef = useRef('')
   const selectedUserRef = useRef<Profile | null>(null)
   const incomingCallRef = useRef<typeof incomingCall>(null)
   const callTypeRef = useRef<typeof callType>(null)
   const checkingCallsRef = useRef(false)
+  const typingChannelRef = useRef<RealtimeChannel | null>(null)
+  const typingSubscribedRef = useRef(false)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const otherTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   incomingCallRef.current = incomingCall
   callTypeRef.current = callType
@@ -44,12 +53,16 @@ export default function MessagesPage() {
       setUserId(uid)
       userIdRef.current = uid
       fetchPeople(uid)
+      peoplePollRef.current = setInterval(() => fetchPeople(uid), 30000)
       // Poll for incoming calls every 3s
       pollRef.current = setInterval(() => checkIncomingCalls(uid), 3000)
     })
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
       if (msgPollRef.current) clearInterval(msgPollRef.current)
+      if (peoplePollRef.current) clearInterval(peoplePollRef.current)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current)
     }
   }, [])
 
@@ -59,6 +72,8 @@ export default function MessagesPage() {
 
   useEffect(() => {
     selectedUserRef.current = selectedUser
+    setImageFile(null)
+    setMessageError('')
     // Clear old message polling
     if (msgPollRef.current) clearInterval(msgPollRef.current)
     if (!selectedUser || !userIdRef.current) return
@@ -78,10 +93,48 @@ export default function MessagesPage() {
     }
   }, [selectedUser])
 
+  useEffect(() => {
+    if (!selectedUser || !userId) return
+
+    const supabase = createClient()
+    const channel = supabase.channel(
+      `dm-typing-${[userId, selectedUser.id].sort().join('-')}`,
+      { config: { broadcast: { self: false } } }
+    )
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload?.userId === userId) return
+        if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current)
+        setOtherTyping(Boolean(payload?.isTyping))
+        if (payload?.isTyping) {
+          otherTypingTimeoutRef.current = setTimeout(() => setOtherTyping(false), 2000)
+        }
+      })
+      .subscribe(status => {
+        typingSubscribedRef.current = status === 'SUBSCRIBED'
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`Typing indicator channel ${status.toLowerCase()}`)
+        }
+      })
+
+    typingChannelRef.current = channel
+    return () => {
+      typingSubscribedRef.current = false
+      typingChannelRef.current = null
+      setOtherTyping(false)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      if (otherTypingTimeoutRef.current) clearTimeout(otherTypingTimeoutRef.current)
+      void supabase.removeChannel(channel)
+    }
+  }, [selectedUser?.id, userId])
+
   const fetchPeople = async (uid: string) => {
     const supabase = createClient()
-    const { data } = await supabase.from('profiles').select('id, username, avatar_url').neq('id', uid)
-    setPeople(data || [])
+    const { data, error } = await supabase.from('profiles').select('id, username, avatar_url, last_seen').neq('id', uid)
+    if (error) {
+      console.error('Could not load people:', error)
+    } else if (data) {
+      setPeople(data)
+    }
     setLoading(false)
   }
 
@@ -104,27 +157,123 @@ export default function MessagesPage() {
       .eq('sender_id', otherId).eq('receiver_id', uid).eq('read', false)
   }
 
+  const sendTyping = (isTyping: boolean) => {
+    if (!typingChannelRef.current || !typingSubscribedRef.current) return
+    void typingChannelRef.current.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId, isTyping },
+    }).then(status => {
+      if (status !== 'ok') console.error(`Typing indicator broadcast failed: ${status}`)
+    }).catch(error => console.error('Typing indicator broadcast failed:', error))
+  }
+
+  const handleMessageChange = (value: string) => {
+    setNewMessage(value)
+    setMessageError('')
+    const isTyping = Boolean(value.trim())
+    sendTyping(isTyping)
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    if (isTyping) {
+      typingTimeoutRef.current = setTimeout(() => sendTyping(false), 1200)
+    }
+  }
+
+  const selectImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'].includes(file.type)) {
+      setMessageError('Choose a JPEG, PNG, GIF, WebP, or AVIF image.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMessageError('Images must be 10 MB or smaller.')
+      return
+    }
+    setMessageError('')
+    setImageFile(file)
+  }
+
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedUser || sending) return
+    if ((!newMessage.trim() && !imageFile) || !selectedUser || sending) return
     const text = newMessage.trim()
-    setNewMessage('')
     setSending(true)
+    setMessageError('')
+    sendTyping(false)
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
 
     const supabase = createClient()
-    const { data: inserted, error } = await supabase
-      .from('messages')
-      .insert({ sender_id: userId, receiver_id: selectedUser.id, content: text })
-      .select()
-      .single()
+    let uploadedImagePath: string | null = null
+    try {
+      let imageUrl: string | null = null
+      if (imageFile) {
+        const extensions: Record<string, string> = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/gif': 'gif',
+          'image/webp': 'webp',
+          'image/avif': 'avif',
+        }
+        const extension = extensions[imageFile.type]
+        if (!extension) throw new Error('Unsupported image type')
+        const path = `messages/${userId}/${selectedUser.id}/${Date.now()}.${extension}`
+        const { error: uploadError } = await supabase.storage.from('posts').upload(path, imageFile, {
+          cacheControl: '3600',
+          contentType: imageFile.type,
+          upsert: false,
+        })
+        if (uploadError) throw new Error(`Could not upload image: ${uploadError.message}`)
+        uploadedImagePath = path
+        imageUrl = supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
+      }
 
-    if (!error && inserted) {
+      const { data: inserted, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: userId,
+          receiver_id: selectedUser.id,
+          content: text || (imageUrl ? '📷 Image' : ''),
+          image_url: imageUrl,
+        })
+        .select()
+        .single()
+      if (error) throw new Error(`Could not send message: ${error.message}`)
+      if (!inserted) throw new Error('Message was not returned after sending')
+
       setMessages(prev => [...prev, inserted])
+      setNewMessage('')
+      setImageFile(null)
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-      await supabase.from('notifications').insert({ user_id: selectedUser.id, actor_id: userId, type: 'message' })
-    } else {
-      setNewMessage(text) // restore if failed
+      const { error: notificationError } = await supabase.from('notifications').insert({ user_id: selectedUser.id, actor_id: userId, type: 'message' })
+      if (notificationError) console.error('Could not notify recipient of message:', notificationError)
+    } catch (error) {
+      if (uploadedImagePath) {
+        const { error: cleanupError } = await supabase.storage.from('posts').remove([uploadedImagePath])
+        if (cleanupError) console.error('Could not remove unsent image attachment:', cleanupError)
+      }
+      console.error('Could not send message:', error)
+      setMessageError(error instanceof Error ? error.message : 'Could not send message')
+    } finally {
+      setSending(false)
     }
-    setSending(false)
+  }
+
+  const isOnline = (lastSeen: string | null) => {
+    if (!lastSeen) return false
+    const timestamp = Date.parse(lastSeen)
+    return Number.isFinite(timestamp) && Date.now() - timestamp < 75000
+  }
+
+  const lastSeenLabel = (lastSeen: string | null) => {
+    if (!lastSeen) return 'Offline'
+    const timestamp = Date.parse(lastSeen)
+    if (!Number.isFinite(timestamp)) return 'Offline'
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+    if (seconds < 60) return 'Last seen just now'
+    if (seconds < 3600) return `Last seen ${Math.floor(seconds / 60)}m ago`
+    if (seconds < 86400) return `Last seen ${Math.floor(seconds / 3600)}h ago`
+    return `Last seen ${Math.floor(seconds / 86400)}d ago`
   }
 
   const checkIncomingCalls = async (uid: string) => {
@@ -251,6 +400,9 @@ export default function MessagesPage() {
       {person.avatar_url ? <img src={person.avatar_url} alt={person.username} className="w-full h-full object-cover" /> : person.username[0].toUpperCase()}
     </div>
   )
+  const selectedLastSeen = selectedUser
+    ? people.find(person => person.id === selectedUser.id)?.last_seen || selectedUser.last_seen
+    : null
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
@@ -279,7 +431,9 @@ export default function MessagesPage() {
                     <Avatar person={person} size={10} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{person.username}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Tap to message</p>
+                      <p className="text-xs mt-0.5" style={{ color: isOnline(person.last_seen) ? '#10B981' : 'var(--muted)' }}>
+                        {isOnline(person.last_seen) ? '● Online' : lastSeenLabel(person.last_seen)}
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -295,7 +449,11 @@ export default function MessagesPage() {
                       <Avatar person={selectedUser} size={9} />
                       <div>
                         <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>{selectedUser.username}</p>
-                        <p className="text-xs" style={{ color: '#10B981' }}>● Online</p>
+                        <p className="text-xs" style={{ color: isOnline(selectedLastSeen) ? '#10B981' : 'var(--muted)' }}>
+                          {isOnline(selectedLastSeen)
+                            ? '● Online'
+                            : lastSeenLabel(selectedLastSeen)}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -320,9 +478,10 @@ export default function MessagesPage() {
                         <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-2`}>
                           {!isMe && <Avatar person={selectedUser} size={7} />}
                           <div className="max-w-xs">
-                            <div className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
+                            <div className={`overflow-hidden rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
                               style={isMe ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' } : { background: 'var(--hover-bg)', color: 'var(--text)' }}>
-                              <p>{msg.content}</p>
+                              {msg.image_url && <a href={msg.image_url} target="_blank" rel="noreferrer"><img src={msg.image_url} alt="Image attachment" className="max-h-64 max-w-full object-contain" /></a>}
+                              {msg.content && msg.content !== '📷 Image' && <p className="px-4 py-2.5">{msg.content}</p>}
                             </div>
                             <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                               <p className="text-xs" style={{ color: 'var(--muted)' }}>{timeAgo(msg.created_at)}</p>
@@ -332,18 +491,35 @@ export default function MessagesPage() {
                         </div>
                       )
                     })}
+                    {otherTyping && (
+                      <p className="text-xs px-2" style={{ color: 'var(--muted)' }} aria-live="polite">
+                        {selectedUser.username} is typing…
+                      </p>
+                    )}
                     <div ref={messagesEndRef} />
                   </div>
 
                   <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
+                    {messageError && <p role="alert" className="mb-2 text-xs text-red-600">{messageError}</p>}
+                    {imageFile && (
+                      <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
+                        <span className="truncate">Image: {imageFile.name}</span>
+                        <button type="button" onClick={() => setImageFile(null)} aria-label="Remove image" className="text-red-500">Remove</button>
+                      </div>
+                    )}
                     <div className="flex gap-3 items-center">
                       <input type="text" value={newMessage}
-                        onChange={e => setNewMessage(e.target.value)}
+                        onChange={e => handleMessageChange(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
                         placeholder={`Message ${selectedUser.username}...`}
                         className="flex-1 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
                         style={{ background: 'var(--input-bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                      <button onClick={sendMessage} disabled={!newMessage.trim() || sending}
+                      <label className="w-11 h-11 rounded-2xl flex items-center justify-center cursor-pointer border"
+                        style={{ borderColor: 'var(--border)', color: 'var(--muted)' }} title="Attach image">
+                        <span aria-hidden="true">📎</span>
+                        <input type="file" accept="image/*" onChange={selectImage} className="hidden" />
+                      </label>
+                      <button onClick={sendMessage} disabled={(!newMessage.trim() && !imageFile) || sending}
                         className="w-11 h-11 rounded-2xl flex items-center justify-center text-white transition hover:opacity-90 disabled:opacity-40 shadow-md flex-shrink-0"
                         style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                         {sending ? '...' : '➤'}

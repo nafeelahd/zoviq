@@ -1,38 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function POST(request: NextRequest) {
-  const { roomName } = await request.json()
-  const apiKey = process.env.NEXT_PUBLIC_DAILY_API_KEY
+type DailyRoom = {
+  url?: string
+  error?: string
+  info?: string
+}
 
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Daily API key not configured' }, { status: 500 })
+export async function POST(request: NextRequest) {
+  let roomName: unknown
+  try {
+    ({ roomName } = await request.json())
+  } catch {
+    return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 })
   }
 
-  // Sanitize - Daily only allows lowercase alphanumeric and hyphens, max 40 chars
+  if (typeof roomName !== 'string' || !roomName.trim()) {
+    return NextResponse.json({ error: 'A room name is required' }, { status: 400 })
+  }
+
+  const apiKey = process.env.DAILY_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Daily API key is not configured. Set DAILY_API_KEY on the server.' }, { status: 500 })
+  }
+
   const sanitized = roomName
+    .trim()
     .replace(/[^a-zA-Z0-9-]/g, '-')
     .toLowerCase()
     .slice(0, 40)
 
+  if (!/[a-z0-9]/.test(sanitized)) {
+    return NextResponse.json({ error: 'Room name must contain at least one letter or number' }, { status: 400 })
+  }
+
+  const headers = { Authorization: `Bearer ${apiKey}` }
+
   try {
-    // Always try to get existing room first
-    const getRes = await fetch(`https://api.daily.co/v1/rooms/${sanitized}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
+    const getRes = await fetch(`https://api.daily.co/v1/rooms/${sanitized}`, { headers })
 
     if (getRes.ok) {
-      const room = await getRes.json()
-      console.log('Using existing room:', room.url)
-      return NextResponse.json({ url: room.url, roomName: sanitized })
+      const room = await getRes.json() as DailyRoom
+      if (room.url) return NextResponse.json({ url: room.url, roomName: sanitized })
+      return NextResponse.json({ error: 'Daily returned a room without a URL' }, { status: 502 })
     }
 
-    // Create room with 2 hour expiry
+    if (getRes.status !== 404) {
+      const error = await getRes.json().catch(() => ({})) as DailyRoom
+      return NextResponse.json(
+        { error: error.info || error.error || `Daily could not check the room (HTTP ${getRes.status})` },
+        { status: 502 }
+      )
+    }
+
     const createRes = await fetch('https://api.daily.co/v1/rooms', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: sanitized,
         properties: {
@@ -47,15 +69,17 @@ export async function POST(request: NextRequest) {
       }),
     })
 
-    const room = await createRes.json()
-    console.log('Created room:', room)
-
-    if (!room.url) {
-      return NextResponse.json({ error: room.error || 'Room creation failed' }, { status: 500 })
+    const room = await createRes.json().catch(() => ({})) as DailyRoom
+    if (!createRes.ok || !room.url) {
+      return NextResponse.json(
+        { error: room.info || room.error || `Daily could not create the room (HTTP ${createRes.status})` },
+        { status: 502 }
+      )
     }
 
     return NextResponse.json({ url: room.url, roomName: sanitized })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (error) {
+    console.error('Daily room request failed:', error)
+    return NextResponse.json({ error: 'Could not reach Daily. Please try again.' }, { status: 502 })
   }
 }

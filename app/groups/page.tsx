@@ -36,6 +36,7 @@ export default function GroupsPage() {
   const [callType, setCallType] = useState<'video' | 'audio' | null>(null)
   const [roomUrl, setRoomUrl] = useState('')
   const [startingCall, setStartingCall] = useState(false)
+  const [callError, setCallError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
 
@@ -211,21 +212,39 @@ export default function GroupsPage() {
   }
 
   const startGroupCall = async (type: 'video' | 'audio') => {
-    if (!selectedGroup) return
+    if (!selectedGroup?.is_member) return
     setStartingCall(true)
+    setCallError('')
     try {
       const roomName = `group-${selectedGroup.id}`
       const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
-      const data = await res.json()
-      if (data.url) {
-        setRoomUrl(data.url); setCallType(type)
-        const supabase = createClient()
-        for (const member of members.filter(m => m.user_id !== userId)) {
-          await supabase.from('notifications').insert({ user_id: member.user_id, actor_id: userId, type: type === 'video' ? 'video_call' : 'audio_call', group_id: selectedGroup.id })
-        }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) throw new Error(data.error || 'Could not create the call room')
+
+      const supabase = createClient()
+      const notifications = members
+        .filter(member => member.user_id !== userId)
+        .map(member => ({
+          user_id: member.user_id,
+          actor_id: userId,
+          type: type === 'video' ? 'video_call' : 'audio_call',
+          group_id: selectedGroup.id,
+          call_room: roomName,
+          read: false,
+        }))
+      if (notifications.length) {
+        const { error } = await supabase.from('notifications').insert(notifications)
+        if (error) throw error
       }
-    } catch (e) { console.error(e) }
-    setStartingCall(false)
+
+      setRoomUrl(data.url)
+      setCallType(type)
+    } catch (error) {
+      console.error('Could not start group call:', error)
+      setCallError(error instanceof Error ? error.message : 'Could not start the group call')
+    } finally {
+      setStartingCall(false)
+    }
   }
 
   const timeAgo = (date: string) => {
@@ -406,9 +425,9 @@ export default function GroupsPage() {
                       <button onClick={() => { setShowAddUser(true); setUserSearch('') }}
                         className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 transition text-lg" title="Add member">➕</button>
                     )}
-                    <button onClick={() => startGroupCall('audio')} disabled={startingCall}
+                    <button onClick={() => startGroupCall('audio')} disabled={startingCall || !selectedGroup.is_member}
                       className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 transition text-lg" title="Audio call">📞</button>
-                    <button onClick={() => startGroupCall('video')} disabled={startingCall}
+                    <button onClick={() => startGroupCall('video')} disabled={startingCall || !selectedGroup.is_member}
                       className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 transition text-lg" title="Video call">📹</button>
                     {selectedGroup.is_member && !isAdmin && (
                       <button onClick={leaveGroup} className="text-xs px-3 py-1.5 rounded-xl border hover:bg-red-50 hover:text-red-500 transition" style={{ color: 'var(--sub)', borderColor: '#E5E7EB' }}>Leave</button>
@@ -418,6 +437,8 @@ export default function GroupsPage() {
                     )}
                   </div>
                 </div>
+
+                {callError && <p role="alert" className="px-5 py-2 text-sm text-red-600">{callError}</p>}
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">

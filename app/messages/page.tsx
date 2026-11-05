@@ -20,12 +20,20 @@ export default function MessagesPage() {
   const [callType, setCallType] = useState<'video' | 'audio' | null>(null)
   const [roomUrl, setRoomUrl] = useState('')
   const [startingCall, setStartingCall] = useState(false)
+  const [callError, setCallError] = useState('')
+  const [callName, setCallName] = useState('')
   const [incomingCall, setIncomingCall] = useState<{ callerName: string; callType: 'video' | 'audio'; roomUrl: string; notifId: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const msgPollRef = useRef<NodeJS.Timeout | null>(null)
   const userIdRef = useRef('')
   const selectedUserRef = useRef<Profile | null>(null)
+  const incomingCallRef = useRef<typeof incomingCall>(null)
+  const callTypeRef = useRef<typeof callType>(null)
+  const checkingCallsRef = useRef(false)
+
+  incomingCallRef.current = incomingCall
+  callTypeRef.current = callType
 
   useEffect(() => {
     const supabase = createClient()
@@ -119,6 +127,8 @@ export default function MessagesPage() {
   }
 
   const checkIncomingCalls = async (uid: string) => {
+    if (checkingCallsRef.current || incomingCallRef.current || callTypeRef.current) return
+    checkingCallsRef.current = true
     try {
       const supabase = createClient()
       const { data } = await supabase
@@ -130,48 +140,88 @@ export default function MessagesPage() {
         .order('created_at', { ascending: false })
         .limit(1)
 
-      if (data && data.length > 0 && !incomingCall && !callType) {
+      if (data && data.length > 0 && !incomingCallRef.current && !callTypeRef.current) {
         const notif = data[0]
         const { data: profile } = await supabase.from('profiles').select('username').eq('id', notif.actor_id).single()
-        const type = notif.type === 'video_call' ? 'video' : 'audio'
-        const roomName = notif.call_room || `dm-${[uid, notif.actor_id].sort().join('-')}`
+        const type: 'video' | 'audio' = notif.type === 'video_call' ? 'video' : 'audio'
+        const roomName = notif.call_room || (notif.group_id
+          ? `group-${notif.group_id}`
+          : `dm-${[uid, notif.actor_id].sort().join('-')}`)
         const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
-        const roomData = await res.json()
+        const roomData = await res.json().catch(() => ({}))
+        if (!res.ok || !roomData.url) throw new Error(roomData.error || 'Could not join this call')
+
+        let callerName = profile?.username || 'Someone'
+        if (notif.group_id) {
+          const { data: group } = await supabase.from('groups').select('name').eq('id', notif.group_id).maybeSingle()
+          callerName = group?.name || callerName
+        }
+
         if (roomData.url) {
-          setIncomingCall({ callerName: profile?.username || 'Someone', callType: type, roomUrl: roomData.url, notifId: notif.id })
+          const nextIncomingCall = { callerName, callType: type, roomUrl: roomData.url, notifId: notif.id }
+          incomingCallRef.current = nextIncomingCall
+          setIncomingCall(nextIncomingCall)
         }
       }
-    } catch {}
+    } catch (error) {
+      console.error('Could not check incoming calls:', error)
+    } finally {
+      checkingCallsRef.current = false
+    }
   }
 
   const startCall = async (type: 'video' | 'audio') => {
     if (!selectedUser) return
     setStartingCall(true)
+    setCallError('')
     try {
       const roomName = `dm-${[userId, selectedUser.id].sort().join('-')}`
       const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
-      const data = await res.json()
-      if (data.url) {
-        setRoomUrl(data.url)
-        setCallType(type)
-        const supabase = createClient()
-        await supabase.from('notifications').insert({ user_id: selectedUser.id, actor_id: userId, type: type === 'video' ? 'video_call' : 'audio_call', call_room: roomName, read: false })
-      }
-    } catch (e) { console.error(e) }
-    setStartingCall(false)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) throw new Error(data.error || 'Could not create the call room')
+
+      const supabase = createClient()
+      const { error } = await supabase.from('notifications').insert({
+        user_id: selectedUser.id,
+        actor_id: userId,
+        type: type === 'video' ? 'video_call' : 'audio_call',
+        call_room: roomName,
+        read: false,
+      })
+      if (error) throw error
+
+      setRoomUrl(data.url)
+      setCallName(selectedUser.username)
+      setCallType(type)
+    } catch (error) {
+      console.error('Could not start call:', error)
+      setCallError(error instanceof Error ? error.message : 'Could not start the call')
+    } finally {
+      setStartingCall(false)
+    }
   }
 
   const acceptCall = async () => {
     if (!incomingCall) return
     const supabase = createClient()
-    await supabase.from('notifications').update({ read: true }).eq('id', incomingCall.notifId)
-    setRoomUrl(incomingCall.roomUrl); setCallType(incomingCall.callType); setIncomingCall(null)
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', incomingCall.notifId)
+    if (error) {
+      setCallError(`Could not accept call: ${error.message}`)
+      return
+    }
+    setRoomUrl(incomingCall.roomUrl)
+    setCallName(incomingCall.callerName)
+    setCallType(incomingCall.callType)
+    callTypeRef.current = incomingCall.callType
+    incomingCallRef.current = null
+    setIncomingCall(null)
   }
 
   const declineCall = async () => {
     if (!incomingCall) return
     const supabase = createClient()
     await supabase.from('notifications').update({ read: true }).eq('id', incomingCall.notifId)
+    incomingCallRef.current = null
     setIncomingCall(null)
   }
 
@@ -193,8 +243,9 @@ export default function MessagesPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <Navbar activePage="messages" />
+      {callError && <p role="alert" className="max-w-4xl mx-auto mt-3 px-4 text-sm text-red-600">{callError}</p>}
       {incomingCall && !callType && <IncomingCall callerName={incomingCall.callerName} callType={incomingCall.callType} onAccept={acceptCall} onDecline={declineCall} />}
-      {callType && roomUrl && <CallModal roomUrl={roomUrl} callType={callType} callerName={selectedUser?.username || 'User'} onLeave={() => { setCallType(null); setRoomUrl('') }} />}
+      {callType && roomUrl && <CallModal roomUrl={roomUrl} callType={callType} callerName={callName} onLeave={() => { callTypeRef.current = null; setCallType(null); setRoomUrl(''); setCallName('') }} />}
 
       <main className="max-w-4xl mx-auto py-6 px-4">
         <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: 'var(--card)', borderColor: 'var(--border)', height: '78vh' }}>

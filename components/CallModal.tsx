@@ -26,7 +26,8 @@ export default function CallModal({ roomUrl, onLeave, callType, callerName }: Ca
         ? { audio: true, video: true }
         : { audio: true, video: false }
 
-      await navigator.mediaDevices.getUserMedia(constraints)
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      stream.getTracks().forEach(track => track.stop())
       // Permissions granted — now join
       setStatus('connecting')
       joinCall()
@@ -102,12 +103,24 @@ export default function CallModal({ roomUrl, onLeave, callType, callerName }: Ca
 
   const toggleMute = async () => {
     if (!frameRef.current) return
-    try { await frameRef.current.setLocalAudio(muted); setMuted(!muted) } catch {}
+    try {
+      await frameRef.current.setLocalAudio(muted)
+      setMuted(!muted)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not change microphone state')
+      setStatus('error')
+    }
   }
 
   const toggleVideo = async () => {
     if (!frameRef.current) return
-    try { await frameRef.current.setLocalVideo(videoOff); setVideoOff(!videoOff) } catch {}
+    try {
+      await frameRef.current.setLocalVideo(videoOff)
+      setVideoOff(!videoOff)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not change camera state')
+      setStatus('error')
+    }
   }
 
   const leaveCall = async () => {
@@ -213,9 +226,10 @@ export default function CallModal({ roomUrl, onLeave, callType, callerName }: Ca
         )}
 
         {/* Daily.co iframe container */}
-        {(status === 'connecting' || status === 'connected') && (
-          <div ref={containerRef} className="absolute inset-0" />
-        )}
+        <div
+          ref={containerRef}
+          className={`absolute inset-0 ${status === 'connecting' || status === 'connected' ? '' : 'hidden'}`}
+        />
       </div>
 
       {/* Controls — only show when connected or connecting */}

@@ -17,11 +17,6 @@ Built with Next.js, Supabase and Daily.co.
 
 </div>
 
----
-
-## Screenshots
-
-> Add screenshots here, for example `docs/feed.png`, `docs/chat.png`, `docs/groups.png`.
 
 ---
 
@@ -233,6 +228,4 @@ Vercel runs a strict TypeScript build, so run `npm run build` locally first to c
 
 Built by [@nafeelahd](https://github.com/nafeelahd).
 
-## License
 
-MIT. Change this if you prefer a different license.

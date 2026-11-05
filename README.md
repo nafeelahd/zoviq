@@ -48,7 +48,7 @@ Built with Next.js, Supabase and Daily.co.
 - Instant UI update when you send a message
 - Online status and last-seen timestamps
 - Live typing indicators
-- Image attachments in direct messages
+- Image and video attachments in direct messages (up to 10 MB per image and 50 MB per video)
 
 **Groups**
 - Public groups (anyone can join) and private groups (admin approves requests)
@@ -147,7 +147,7 @@ Tables used by the app:
 | `likes` | `user_id`, `post_id` (unique pair) |
 | `comments` | `user_id`, `post_id`, `content` |
 | `follows` | `follower_id`, `following_id` (unique pair) |
-| `messages` | `sender_id`, `receiver_id`, `content`, `image_url`, `read` |
+| `messages` | `sender_id`, `receiver_id`, `content`, `image_url`, `video_url`, `read` |
 | `notifications` | `user_id`, `actor_id`, `type`, `post_id`, `group_id`, `call_room`, `read` |
 | `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth` (created by `supabase-setup.sql`) |
 | `stories` | `user_id`, `image_url`, `video_url`, `expires_at` |
@@ -157,7 +157,7 @@ Tables used by the app:
 | `group_requests` | `group_id`, `user_id`, `status` |
 | `group_messages` | `group_id`, `user_id`, `content` |
 
-Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` table, run the setup SQL again to add `last_seen` and the `image_url` attachment column to existing tables.
+Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` table, run the setup SQL again to add `last_seen`, `image_url`, and `video_url` columns to existing tables.
 
 ---
 

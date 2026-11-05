@@ -9,7 +9,7 @@ import IncomingCall from '@/components/IncomingCall'
 import { insertNotification } from '@/lib/notifications'
 
 type Profile = { id: string; username: string; avatar_url: string | null; last_seen: string | null }
-type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; read: boolean; created_at: string }
+type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; video_url: string | null; read: boolean; created_at: string }
 
 export default function MessagesPage() {
   const [userId, setUserId] = useState('')
@@ -17,7 +17,7 @@ export default function MessagesPage() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [messageError, setMessageError] = useState('')
   const [otherTyping, setOtherTyping] = useState(false)
   const [sending, setSending] = useState(false)
@@ -73,7 +73,7 @@ export default function MessagesPage() {
 
   useEffect(() => {
     selectedUserRef.current = selectedUser
-    setImageFile(null)
+    setAttachmentFile(null)
     setMessageError('')
     // Clear old message polling
     if (msgPollRef.current) clearInterval(msgPollRef.current)
@@ -180,24 +180,28 @@ export default function MessagesPage() {
     }
   }
 
-  const selectImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const selectAttachment = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'].includes(file.type)) {
-      setMessageError('Choose a JPEG, PNG, GIF, WebP, or AVIF image.')
+    setAttachmentFile(null)
+    const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'].includes(file.type)
+    const isVideo = ['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v'].includes(file.type)
+    if (!isImage && !isVideo) {
+      setMessageError('Choose a JPEG, PNG, GIF, WebP, AVIF, MP4, WebM, MOV, or OGG file.')
       return
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setMessageError('Images must be 10 MB or smaller.')
+    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024
+    if (file.size > maxSize) {
+      setMessageError(isVideo ? 'Videos must be 50 MB or smaller.' : 'Images must be 10 MB or smaller.')
       return
     }
     setMessageError('')
-    setImageFile(file)
+    setAttachmentFile(file)
   }
 
   const sendMessage = async () => {
-    if ((!newMessage.trim() && !imageFile) || !selectedUser || sending) return
+    if ((!newMessage.trim() && !attachmentFile) || !selectedUser || sending) return
     const text = newMessage.trim()
     setSending(true)
     setMessageError('')
@@ -205,28 +209,39 @@ export default function MessagesPage() {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
 
     const supabase = createClient()
-    let uploadedImagePath: string | null = null
+    let uploadedAttachmentPath: string | null = null
     try {
       let imageUrl: string | null = null
-      if (imageFile) {
-        const extensions: Record<string, string> = {
+      let videoUrl: string | null = null
+      if (attachmentFile) {
+        const imageExtensions: Record<string, string> = {
           'image/jpeg': 'jpg',
           'image/png': 'png',
           'image/gif': 'gif',
           'image/webp': 'webp',
           'image/avif': 'avif',
         }
-        const extension = extensions[imageFile.type]
-        if (!extension) throw new Error('Unsupported image type')
+        const videoExtensions: Record<string, string> = {
+          'video/mp4': 'mp4',
+          'video/webm': 'webm',
+          'video/quicktime': 'mov',
+          'video/ogg': 'ogv',
+          'video/x-m4v': 'm4v',
+        }
+        const isVideo = attachmentFile.type.startsWith('video/')
+        const extension = (isVideo ? videoExtensions : imageExtensions)[attachmentFile.type]
+        if (!extension) throw new Error('Unsupported attachment type')
         const path = `messages/${userId}/${selectedUser.id}/${Date.now()}.${extension}`
-        const { error: uploadError } = await supabase.storage.from('posts').upload(path, imageFile, {
+        const { error: uploadError } = await supabase.storage.from('posts').upload(path, attachmentFile, {
           cacheControl: '3600',
-          contentType: imageFile.type,
+          contentType: attachmentFile.type,
           upsert: false,
         })
-        if (uploadError) throw new Error(`Could not upload image: ${uploadError.message}`)
-        uploadedImagePath = path
-        imageUrl = supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
+        if (uploadError) throw new Error(`Could not upload attachment: ${uploadError.message}`)
+        uploadedAttachmentPath = path
+        const publicUrl = supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
+        if (isVideo) videoUrl = publicUrl
+        else imageUrl = publicUrl
       }
 
       const { data: inserted, error } = await supabase
@@ -234,8 +249,9 @@ export default function MessagesPage() {
         .insert({
           sender_id: userId,
           receiver_id: selectedUser.id,
-          content: text || (imageUrl ? '📷 Image' : ''),
+          content: text || (imageUrl ? '📷 Image' : videoUrl ? '📹 Video' : ''),
           image_url: imageUrl,
+          video_url: videoUrl,
         })
         .select()
         .single()
@@ -244,13 +260,13 @@ export default function MessagesPage() {
 
       setMessages(prev => [...prev, inserted])
       setNewMessage('')
-      setImageFile(null)
+      setAttachmentFile(null)
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
       await insertNotification(supabase, { user_id: selectedUser.id, actor_id: userId, type: 'message' })
     } catch (error) {
-      if (uploadedImagePath) {
-        const { error: cleanupError } = await supabase.storage.from('posts').remove([uploadedImagePath])
-        if (cleanupError) console.error('Could not remove unsent image attachment:', cleanupError)
+      if (uploadedAttachmentPath) {
+        const { error: cleanupError } = await supabase.storage.from('posts').remove([uploadedAttachmentPath])
+        if (cleanupError) console.error('Could not remove unsent message attachment:', cleanupError)
       }
       console.error('Could not send message:', error)
       setMessageError(error instanceof Error ? error.message : 'Could not send message')
@@ -480,7 +496,8 @@ export default function MessagesPage() {
                             <div className={`overflow-hidden rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
                               style={isMe ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' } : { background: 'var(--hover-bg)', color: 'var(--text)' }}>
                               {msg.image_url && <a href={msg.image_url} target="_blank" rel="noreferrer"><img src={msg.image_url} alt="Image attachment" className="max-h-64 max-w-full object-contain" /></a>}
-                              {msg.content && msg.content !== '📷 Image' && <p className="px-4 py-2.5">{msg.content}</p>}
+                              {msg.video_url && <video src={msg.video_url} controls playsInline preload="metadata" className="max-h-64 max-w-full bg-black" aria-label="Video attachment" />}
+                              {msg.content && msg.content !== '📷 Image' && msg.content !== '📹 Video' && <p className="px-4 py-2.5">{msg.content}</p>}
                             </div>
                             <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                               <p className="text-xs" style={{ color: 'var(--muted)' }}>{timeAgo(msg.created_at)}</p>
@@ -500,10 +517,10 @@ export default function MessagesPage() {
 
                   <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
                     {messageError && <p role="alert" className="mb-2 text-xs text-red-600">{messageError}</p>}
-                    {imageFile && (
+                    {attachmentFile && (
                       <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
-                        <span className="truncate">Image: {imageFile.name}</span>
-                        <button type="button" onClick={() => setImageFile(null)} aria-label="Remove image" className="text-red-500">Remove</button>
+                        <span className="truncate">{attachmentFile.type.startsWith('video/') ? 'Video' : 'Image'}: {attachmentFile.name}</span>
+                        <button type="button" onClick={() => setAttachmentFile(null)} aria-label="Remove attachment" className="text-red-500">Remove</button>
                       </div>
                     )}
                     <div className="flex gap-3 items-center">
@@ -514,11 +531,11 @@ export default function MessagesPage() {
                         className="flex-1 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
                         style={{ background: 'var(--input-bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
                       <label className="w-11 h-11 rounded-2xl flex items-center justify-center cursor-pointer border"
-                        style={{ borderColor: 'var(--border)', color: 'var(--muted)' }} title="Attach image">
+                        style={{ borderColor: 'var(--border)', color: 'var(--muted)' }} title="Attach image or video">
                         <span aria-hidden="true">📎</span>
-                        <input type="file" accept="image/*" onChange={selectImage} className="hidden" />
+                        <input type="file" accept="image/*,video/*" onChange={selectAttachment} className="hidden" />
                       </label>
-                      <button onClick={sendMessage} disabled={(!newMessage.trim() && !imageFile) || sending}
+                      <button onClick={sendMessage} disabled={(!newMessage.trim() && !attachmentFile) || sending}
                         className="w-11 h-11 rounded-2xl flex items-center justify-center text-white transition hover:opacity-90 disabled:opacity-40 shadow-md flex-shrink-0"
                         style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                         {sending ? '...' : '➤'}

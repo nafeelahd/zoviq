@@ -13,11 +13,12 @@ create table if not exists public.profiles (
 alter table public.profiles
   add column if not exists last_seen timestamp with time zone;
 
--- Run this setup again after creating the messages table to add image attachments.
+-- Run this setup again after creating the messages table to add media attachments.
 do $$
 begin
   if to_regclass('public.messages') is not null then
     alter table public.messages add column if not exists image_url text;
+    alter table public.messages add column if not exists video_url text;
   end if;
 end;
 $$;

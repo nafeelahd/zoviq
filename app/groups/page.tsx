@@ -35,6 +35,7 @@ export default function GroupsPage() {
   const [userSearch, setUserSearch] = useState('')
   const [callType, setCallType] = useState<'video' | 'audio' | null>(null)
   const [roomUrl, setRoomUrl] = useState('')
+  const [meetingToken, setMeetingToken] = useState('')
   const [startingCall, setStartingCall] = useState(false)
   const [callError, setCallError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -219,7 +220,7 @@ export default function GroupsPage() {
       const roomName = `group-${selectedGroup.id}`
       const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) throw new Error(data.error || 'Could not create the call room')
+      if (!res.ok || !data.url || !data.token) throw new Error(data.error || 'Could not create the call room')
 
       const supabase = createClient()
       const notifications = members
@@ -238,6 +239,7 @@ export default function GroupsPage() {
       }
 
       setRoomUrl(data.url)
+      setMeetingToken(data.token)
       setCallType(type)
     } catch (error) {
       console.error('Could not start group call:', error)
@@ -300,7 +302,7 @@ export default function GroupsPage() {
       <Navbar activePage="groups" />
 
       {callType && roomUrl && (
-        <CallModal roomUrl={roomUrl} callType={callType} callerName={selectedGroup?.name || 'Group'} onLeave={() => { setCallType(null); setRoomUrl('') }} />
+        <CallModal roomUrl={roomUrl} meetingToken={meetingToken} callType={callType} callerName={selectedGroup?.name || 'Group'} onLeave={() => { setCallType(null); setRoomUrl(''); setMeetingToken('') }} />
       )}
 
       <main className="max-w-5xl mx-auto py-6 px-4">

@@ -53,6 +53,7 @@ Built with Next.js, Supabase and Daily.co.
 
 **Calls**
 - Audio and video calls in direct messages and groups, powered by Daily.co
+- Private Daily rooms with authenticated, room-scoped meeting tokens
 - Incoming call screen with accept and decline
 - Mute, camera toggle, end call, and a mic/camera permission step before joining
 

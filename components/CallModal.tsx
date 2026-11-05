@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 
 interface CallModalProps {
   roomUrl: string
+  meetingToken: string
   onLeave: () => void
   callType: 'video' | 'audio'
   callerName: string
 }
 
-export default function CallModal({ roomUrl, onLeave, callType, callerName }: CallModalProps) {
+export default function CallModal({ roomUrl, meetingToken, onLeave, callType, callerName }: CallModalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<'permission' | 'connecting' | 'connected' | 'error'>('permission')
   const [error, setError] = useState('')
@@ -82,6 +83,7 @@ export default function CallModal({ roomUrl, onLeave, callType, callerName }: Ca
 
       await frame.join({
         url: roomUrl,
+        token: meetingToken,
         startVideoOff: callType === 'audio',
         startAudioOff: false,
       })

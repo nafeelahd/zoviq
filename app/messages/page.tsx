@@ -19,10 +19,11 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true)
   const [callType, setCallType] = useState<'video' | 'audio' | null>(null)
   const [roomUrl, setRoomUrl] = useState('')
+  const [meetingToken, setMeetingToken] = useState('')
   const [startingCall, setStartingCall] = useState(false)
   const [callError, setCallError] = useState('')
   const [callName, setCallName] = useState('')
-  const [incomingCall, setIncomingCall] = useState<{ callerName: string; callType: 'video' | 'audio'; roomUrl: string; notifId: string } | null>(null)
+  const [incomingCall, setIncomingCall] = useState<{ callerName: string; callType: 'video' | 'audio'; roomName: string; notifId: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const msgPollRef = useRef<NodeJS.Timeout | null>(null)
@@ -147,9 +148,6 @@ export default function MessagesPage() {
         const roomName = notif.call_room || (notif.group_id
           ? `group-${notif.group_id}`
           : `dm-${[uid, notif.actor_id].sort().join('-')}`)
-        const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
-        const roomData = await res.json().catch(() => ({}))
-        if (!res.ok || !roomData.url) throw new Error(roomData.error || 'Could not join this call')
 
         let callerName = profile?.username || 'Someone'
         if (notif.group_id) {
@@ -157,11 +155,9 @@ export default function MessagesPage() {
           callerName = group?.name || callerName
         }
 
-        if (roomData.url) {
-          const nextIncomingCall = { callerName, callType: type, roomUrl: roomData.url, notifId: notif.id }
-          incomingCallRef.current = nextIncomingCall
-          setIncomingCall(nextIncomingCall)
-        }
+        const nextIncomingCall = { callerName, callType: type, roomName, notifId: notif.id }
+        incomingCallRef.current = nextIncomingCall
+        setIncomingCall(nextIncomingCall)
       }
     } catch (error) {
       console.error('Could not check incoming calls:', error)
@@ -178,7 +174,7 @@ export default function MessagesPage() {
       const roomName = `dm-${[userId, selectedUser.id].sort().join('-')}`
       const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) throw new Error(data.error || 'Could not create the call room')
+      if (!res.ok || !data.url || !data.token) throw new Error(data.error || 'Could not create the call room')
 
       const supabase = createClient()
       const { error } = await supabase.from('notifications').insert({
@@ -191,6 +187,7 @@ export default function MessagesPage() {
       if (error) throw error
 
       setRoomUrl(data.url)
+      setMeetingToken(data.token)
       setCallName(selectedUser.username)
       setCallType(type)
     } catch (error) {
@@ -203,18 +200,33 @@ export default function MessagesPage() {
 
   const acceptCall = async () => {
     if (!incomingCall) return
-    const supabase = createClient()
-    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', incomingCall.notifId)
-    if (error) {
-      setCallError(`Could not accept call: ${error.message}`)
-      return
+    setCallError('')
+    try {
+      const res = await fetch('/api/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomName: incomingCall.roomName }),
+      })
+      const callData = await res.json().catch(() => ({}))
+      if (!res.ok || !callData.url || !callData.token) {
+        throw new Error(callData.error || 'Could not authorize this call')
+      }
+
+      const supabase = createClient()
+      const { error } = await supabase.from('notifications').update({ read: true }).eq('id', incomingCall.notifId)
+      if (error) throw new Error(`Could not accept call: ${error.message}`)
+
+      setRoomUrl(callData.url)
+      setMeetingToken(callData.token)
+      setCallName(incomingCall.callerName)
+      setCallType(incomingCall.callType)
+      callTypeRef.current = incomingCall.callType
+      incomingCallRef.current = null
+      setIncomingCall(null)
+    } catch (error) {
+      console.error('Could not accept call:', error)
+      setCallError(error instanceof Error ? error.message : 'Could not authorize this call')
     }
-    setRoomUrl(incomingCall.roomUrl)
-    setCallName(incomingCall.callerName)
-    setCallType(incomingCall.callType)
-    callTypeRef.current = incomingCall.callType
-    incomingCallRef.current = null
-    setIncomingCall(null)
   }
 
   const declineCall = async () => {
@@ -245,7 +257,7 @@ export default function MessagesPage() {
       <Navbar activePage="messages" />
       {callError && <p role="alert" className="max-w-4xl mx-auto mt-3 px-4 text-sm text-red-600">{callError}</p>}
       {incomingCall && !callType && <IncomingCall callerName={incomingCall.callerName} callType={incomingCall.callType} onAccept={acceptCall} onDecline={declineCall} />}
-      {callType && roomUrl && <CallModal roomUrl={roomUrl} callType={callType} callerName={callName} onLeave={() => { callTypeRef.current = null; setCallType(null); setRoomUrl(''); setCallName('') }} />}
+      {callType && roomUrl && meetingToken && <CallModal roomUrl={roomUrl} meetingToken={meetingToken} callType={callType} callerName={callName} onLeave={() => { callTypeRef.current = null; setCallType(null); setRoomUrl(''); setMeetingToken(''); setCallName('') }} />}
 
       <main className="max-w-4xl mx-auto py-6 px-4">
         <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: 'var(--card)', borderColor: 'var(--border)', height: '78vh' }}>

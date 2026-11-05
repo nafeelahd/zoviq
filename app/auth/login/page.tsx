@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import AuthShell from '@/components/auth/AuthShell'
+import AuthNotice from '@/components/auth/AuthNotice'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -20,7 +22,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, #FDF2F8 50%, #F0FDF4 100%)' }}>
+    <AuthShell>
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -33,7 +35,7 @@ export default function LoginPage() {
           <p className="text-sm" style={{ color: '#6B7280' }}>Welcome back! Sign in to continue</p>
         </div>
 
-        <div className="rounded-3xl p-8 shadow-xl border" style={{ background: 'white', borderColor: '#F0EFF8' }}>
+        <div className="auth-card rounded-3xl p-8">
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Email</label>
@@ -53,9 +55,7 @@ export default function LoginPage() {
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
-            )}
+            {error && <AuthNotice>{error}</AuthNotice>}
 
             <button type="submit" disabled={loading}
               className="w-full text-white font-semibold py-3.5 rounded-xl text-sm transition disabled:opacity-50 shadow-md hover:shadow-lg"
@@ -74,6 +74,6 @@ export default function LoginPage() {
 
         <p className="text-center text-xs mt-6" style={{ color: '#9CA3AF' }}>Your world. Your moment. 🌟</p>
       </div>
-    </div>
+    </AuthShell>
   )
 }

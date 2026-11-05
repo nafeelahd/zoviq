@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import CallModal from '@/components/CallModal'
+import { insertNotification, insertNotifications } from '@/lib/notifications'
 
 type Group = { id: string; name: string; description: string | null; image_url: string | null; created_by: string; created_at: string; privacy: 'public' | 'private'; member_count: number; is_member: boolean; request_status: 'none' | 'pending' | 'accepted' }
 type GroupMessage = { id: string; content: string; created_at: string; user_id: string; username: string }
@@ -150,10 +151,10 @@ export default function GroupsPage() {
     const supabase = createClient()
     if (group.privacy === 'public') {
       await supabase.from('group_members').insert({ group_id: group.id, user_id: userId, role: 'member' })
-      await supabase.from('notifications').insert({ user_id: group.created_by, actor_id: userId, type: 'group_join', group_id: group.id })
+      await insertNotification(supabase, { user_id: group.created_by, actor_id: userId, type: 'group_join', group_id: group.id })
     } else {
       await supabase.from('group_requests').upsert({ group_id: group.id, user_id: userId, status: 'pending' })
-      await supabase.from('notifications').insert({ user_id: group.created_by, actor_id: userId, type: 'group_request', group_id: group.id })
+      await insertNotification(supabase, { user_id: group.created_by, actor_id: userId, type: 'group_request', group_id: group.id })
     }
     fetchGroups(userId)
   }
@@ -162,7 +163,7 @@ export default function GroupsPage() {
     const supabase = createClient()
     await supabase.from('group_members').upsert({ group_id: selectedGroup!.id, user_id: request.user_id, role: 'member' })
     await supabase.from('group_requests').update({ status: 'accepted' }).eq('id', request.id)
-    await supabase.from('notifications').insert({ user_id: request.user_id, actor_id: userId, type: 'group_accepted', group_id: selectedGroup!.id })
+    await insertNotification(supabase, { user_id: request.user_id, actor_id: userId, type: 'group_accepted', group_id: selectedGroup!.id })
     fetchJoinRequests(selectedGroup!.id); fetchMembers(selectedGroup!.id); fetchGroups(userId)
   }
 
@@ -176,14 +177,14 @@ export default function GroupsPage() {
     const supabase = createClient()
     await supabase.from('group_members').upsert({ group_id: selectedGroup!.id, user_id: targetUserId, role: 'member' })
     await supabase.from('group_requests').delete().eq('group_id', selectedGroup!.id).eq('user_id', targetUserId)
-    await supabase.from('notifications').insert({ user_id: targetUserId, actor_id: userId, type: 'group_added', group_id: selectedGroup!.id })
+    await insertNotification(supabase, { user_id: targetUserId, actor_id: userId, type: 'group_added', group_id: selectedGroup!.id })
     fetchMembers(selectedGroup!.id); fetchGroups(userId)
   }
 
   const removeMember = async (memberId: string, memberUserId: string) => {
     const supabase = createClient()
     await supabase.from('group_members').delete().eq('id', memberId)
-    await supabase.from('notifications').insert({ user_id: memberUserId, actor_id: userId, type: 'group_removed', group_id: selectedGroup!.id })
+    await insertNotification(supabase, { user_id: memberUserId, actor_id: userId, type: 'group_removed', group_id: selectedGroup!.id })
     fetchMembers(selectedGroup!.id); fetchGroups(userId)
   }
 
@@ -207,7 +208,7 @@ export default function GroupsPage() {
     if (error) { setSendError('Failed: ' + error.message); setSending(false); return }
     const otherMembers = members.filter(m => m.user_id !== userId)
     for (const member of otherMembers) {
-      await supabase.from('notifications').insert({ user_id: member.user_id, actor_id: userId, type: 'group_message', group_id: selectedGroup.id })
+      await insertNotification(supabase, { user_id: member.user_id, actor_id: userId, type: 'group_message', group_id: selectedGroup.id })
     }
     setNewMessage(''); setSending(false); fetchMessages(selectedGroup.id)
   }
@@ -234,8 +235,7 @@ export default function GroupsPage() {
           read: false,
         }))
       if (notifications.length) {
-        const { error } = await supabase.from('notifications').insert(notifications)
-        if (error) throw error
+        await insertNotifications(supabase, notifications)
       }
 
       setRoomUrl(data.url)

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import { insertNotification } from '@/lib/notifications'
 
 type Person = { id: string; username: string; bio: string | null; avatar_url: string | null; isFollowing: boolean; followerCount: number }
 
@@ -39,7 +40,7 @@ export default function PeoplePage() {
       await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', targetId)
     } else {
       await supabase.from('follows').insert({ follower_id: userId, following_id: targetId })
-      await supabase.from('notifications').insert({ user_id: targetId, actor_id: userId, type: 'follow' })
+      await insertNotification(supabase, { user_id: targetId, actor_id: userId, type: 'follow' })
     }
     fetchPeople(userId)
   }

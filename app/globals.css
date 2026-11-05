@@ -112,6 +112,31 @@ main > *:nth-child(n + 5) { animation-delay: 0.22s; }
 .grad-btn { background: var(--grad); color: white; border: none; cursor: pointer; }
 .grad-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Shared auth-page surfaces and feedback. */
+.auth-page {
+  color: #14142B;
+  background:
+    radial-gradient(800px 460px at 10% 0%, rgba(99, 102, 241, 0.20), transparent 60%),
+    radial-gradient(700px 420px at 100% 10%, rgba(236, 72, 153, 0.16), transparent 58%),
+    linear-gradient(145deg, #F5F4FF, #FFF8FC 55%, #F2FBFF);
+}
+.auth-orb { position: absolute; width: 18rem; height: 18rem; border-radius: 9999px; filter: blur(80px); opacity: 0.32; pointer-events: none; }
+.auth-orb-one { top: 8%; left: -8rem; background: #818CF8; }
+.auth-orb-two { right: -9rem; bottom: 4%; background: #F472B6; }
+.auth-card {
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 24px 70px rgba(49, 46, 129, 0.14);
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+}
+.auth-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+.auth-notice > span { display: inline-flex; align-items: center; justify-content: center; width: 19px; height: 19px; flex: 0 0 19px; border-radius: 9999px; font-weight: 800; }
+.auth-notice.error { color: #B42340; border-color: #FECDD3; background: rgba(255, 241, 242, 0.9); }
+.auth-notice.error > span { color: white; background: #E11D48; }
+.auth-notice.success { color: #087443; border-color: #A7F3D0; background: rgba(236, 253, 245, 0.92); }
+.auth-notice.success > span { color: white; background: #059669; }
+
 /* Navbar */
 .glass-nav {
   background: var(--nav-bg);

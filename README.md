@@ -30,6 +30,7 @@ Built with Next.js, Supabase and Daily.co.
 
 **Feed**
 - Text, photo and video posts
+- Trim and transcode video clips before uploading
 - Likes and comments
 - Share posts and profiles (copy link, WhatsApp, X, Facebook, Telegram, native share)
 - Search posts and people with highlighted matches
@@ -62,6 +63,7 @@ Built with Next.js, Supabase and Daily.co.
 
 **Notifications**
 - Likes, comments, follows, messages, group activity and calls
+- Optional web push notifications for background alerts
 - Unread badges on the navbar and clickable notifications that open the right page
 
 **App experience**
@@ -114,9 +116,15 @@ Create a `.env.local` file in the project root:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 DAILY_API_KEY=your_daily_api_key
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+VAPID_SUBJECT=mailto:you@example.com
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
-Never commit `.env.local`. It is already listed in `.gitignore`. If your deployment still uses the old `NEXT_PUBLIC_DAILY_API_KEY` variable, the server accepts it temporarily; replace it with `DAILY_API_KEY` to keep the key private.
+Generate the VAPID pair with `npx web-push generate-vapid-keys`. Keep `DAILY_API_KEY`, `VAPID_PRIVATE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` server-only; never use the `NEXT_PUBLIC_` prefix for them. The service-role key is available in your Supabase project's API settings. Never commit `.env.local`; it is already listed in `.gitignore`. If your deployment still uses the old `NEXT_PUBLIC_DAILY_API_KEY` variable, the server accepts it temporarily; replace it with `DAILY_API_KEY` to keep the key private.
+
+Push notifications require HTTPS (localhost is allowed for development), VAPID keys, and the Supabase service-role key. After setting the variables, restart or redeploy the app, sign in, and select **Settings → Turn on push notifications**. Run the updated `supabase-setup.sql` to create the server-managed push-subscription table.
 
 ### 5. Run it
 
@@ -141,6 +149,7 @@ Tables used by the app:
 | `follows` | `follower_id`, `following_id` (unique pair) |
 | `messages` | `sender_id`, `receiver_id`, `content`, `image_url`, `read` |
 | `notifications` | `user_id`, `actor_id`, `type`, `post_id`, `group_id`, `call_room`, `read` |
+| `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth` (created by `supabase-setup.sql`) |
 | `stories` | `user_id`, `image_url`, `video_url`, `expires_at` |
 | `story_views` | `story_id`, `viewer_id` (unique pair) |
 | `groups` | `name`, `description`, `image_url`, `created_by`, `privacy` |
@@ -189,7 +198,7 @@ public/
 
 1. Push the project to GitHub.
 2. Import the repository at [vercel.com](https://vercel.com).
-3. Add the three environment variables from `.env.local` before deploying. Keep `DAILY_API_KEY` server-only; do not prefix it with `NEXT_PUBLIC_`.
+3. Add the environment variables from `.env.local` before deploying. Keep `DAILY_API_KEY`, `VAPID_PRIVATE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` server-only.
 4. Deploy.
 5. In Supabase, go to **Authentication > URL Configuration**. Set the **Site URL** to your Vercel URL and add `https://your-app.vercel.app/auth/callback` and `https://your-app.vercel.app/auth/reset-password` to the **Redirect URLs**.
 
@@ -209,7 +218,7 @@ Vercel runs a strict TypeScript build, so run `npm run build` locally first to c
 
 - Chat messages and navbar badges refresh by polling (messages every 2 seconds, badges every 10 seconds) rather than by live push.
 - Incoming direct and group calls are detected on the Messages page, so the other person sees the ringing screen only while that page is open.
-- The video editor lets you pick trim points, but the uploaded file is not cut yet.
+- Video trimming runs in the browser with FFmpeg WebAssembly; its core is downloaded from unpkg the first time a user trims a video.
 - Delete account removes the user's data and signs them out. Removing the auth user itself needs a server-side admin call.
 - Some Row Level Security policies for groups, stories and notifications are open so development is easy. Tighten them before real users sign up.
 - Calls use the server-only `DAILY_API_KEY` environment variable. Add it to your local `.env.local` and deployment environment; never expose it with the `NEXT_PUBLIC_` prefix. The old `NEXT_PUBLIC_DAILY_API_KEY` name is temporarily supported for existing deployments.
@@ -218,9 +227,9 @@ Vercel runs a strict TypeScript build, so run `npm run build` locally first to c
 
 ## Roadmap
 
-- [ ] Real video trimming
-- [ ] Push notifications
-- [ ] Restyled auth pages and popups to match the new design
+- [x] Real video trimming
+- [x] Push notifications
+- [x] Restyled auth pages and popups to match the new design
 - [ ] Android APK build
 
 ---

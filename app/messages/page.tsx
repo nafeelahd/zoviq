@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import CallModal from '@/components/CallModal'
 import IncomingCall from '@/components/IncomingCall'
+import { insertNotification } from '@/lib/notifications'
 
 type Profile = { id: string; username: string; avatar_url: string | null; last_seen: string | null }
 type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; read: boolean; created_at: string }
@@ -245,8 +246,7 @@ export default function MessagesPage() {
       setNewMessage('')
       setImageFile(null)
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-      const { error: notificationError } = await supabase.from('notifications').insert({ user_id: selectedUser.id, actor_id: userId, type: 'message' })
-      if (notificationError) console.error('Could not notify recipient of message:', notificationError)
+      await insertNotification(supabase, { user_id: selectedUser.id, actor_id: userId, type: 'message' })
     } catch (error) {
       if (uploadedImagePath) {
         const { error: cleanupError } = await supabase.storage.from('posts').remove([uploadedImagePath])
@@ -326,14 +326,13 @@ export default function MessagesPage() {
       if (!res.ok || !data.url || !data.token) throw new Error(data.error || 'Could not create the call room')
 
       const supabase = createClient()
-      const { error } = await supabase.from('notifications').insert({
+      await insertNotification(supabase, {
         user_id: selectedUser.id,
         actor_id: userId,
         type: type === 'video' ? 'video_call' : 'audio_call',
         call_room: roomName,
         read: false,
       })
-      if (error) throw error
 
       setRoomUrl(data.url)
       setMeetingToken(data.token)

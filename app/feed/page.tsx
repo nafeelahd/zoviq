@@ -6,6 +6,7 @@ import VideoEditor from '@/components/VideoEditor'
 import Stories from '@/components/Stories'
 import Navbar from '@/components/Navbar'
 import ShareModal from '@/components/ShareModal'
+import { insertNotification } from '@/lib/notifications'
 
 type Comment = { id: string; content: string; created_at: string; user_id: string }
 type Post = {
@@ -128,7 +129,7 @@ export default function FeedPage() {
     } else {
       await supabase.from('likes').insert({ post_id: postId, user_id: userId })
       if (postOwnerId !== userId) {
-        await supabase.from('notifications').insert({ user_id: postOwnerId, actor_id: userId, type: 'like', post_id: postId })
+        await insertNotification(supabase, { user_id: postOwnerId, actor_id: userId, type: 'like', post_id: postId })
       }
     }
     fetchPosts()
@@ -139,7 +140,7 @@ export default function FeedPage() {
     const supabase = createClient()
     await supabase.from('comments').insert({ post_id: postId, user_id: userId, content: commentText.trim() })
     if (postOwnerId !== userId) {
-      await supabase.from('notifications').insert({ user_id: postOwnerId, actor_id: userId, type: 'comment', post_id: postId })
+      await insertNotification(supabase, { user_id: postOwnerId, actor_id: userId, type: 'comment', post_id: postId })
     }
     setCommentText(''); fetchPosts()
   }

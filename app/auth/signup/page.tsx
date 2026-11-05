@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import AuthShell from '@/components/auth/AuthShell'
+import AuthNotice from '@/components/auth/AuthNotice'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -25,8 +27,8 @@ export default function SignupPage() {
   }
 
   if (success) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, #FDF2F8 50%, #F0FDF4 100%)' }}>
-      <div className="bg-white rounded-3xl p-10 text-center shadow-xl max-w-sm w-full">
+    <AuthShell>
+      <div className="auth-card rounded-3xl p-10 text-center max-w-sm w-full">
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -35,11 +37,11 @@ export default function SignupPage() {
         <h2 className="text-xl font-bold text-gray-900 mb-2">Check your email!</h2>
         <p className="text-gray-500 text-sm">We sent a confirmation link to <strong>{email}</strong></p>
       </div>
-    </div>
+    </AuthShell>
   )
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, #FDF2F8 50%, #F0FDF4 100%)' }}>
+    <AuthShell>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
@@ -51,7 +53,7 @@ export default function SignupPage() {
           <p className="text-sm" style={{ color: '#6B7280' }}>Join the community today 🚀</p>
         </div>
 
-        <div className="rounded-3xl p-8 shadow-xl border" style={{ background: 'white', borderColor: '#F0EFF8' }}>
+        <div className="auth-card rounded-3xl p-8">
           <form onSubmit={handleSignup} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Username</label>
@@ -75,7 +77,7 @@ export default function SignupPage() {
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />
             </div>
 
-            {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>}
+            {error && <AuthNotice>{error}</AuthNotice>}
 
             <button type="submit" disabled={loading}
               className="w-full text-white font-semibold py-3.5 rounded-xl text-sm transition disabled:opacity-50 shadow-md hover:shadow-lg"
@@ -94,6 +96,6 @@ export default function SignupPage() {
 
         <p className="text-center text-xs mt-6" style={{ color: '#9CA3AF' }}>Your world. Your moment. 🌟</p>
       </div>
-    </div>
+    </AuthShell>
   )
 }

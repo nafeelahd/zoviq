@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from '@/lib/useTheme'
+import PushNotifications from '@/components/PushNotifications'
 
 interface NavbarProps {
   activePage?: string
@@ -203,6 +204,7 @@ export default function Navbar({ activePage }: NavbarProps) {
                     <Icon d={darkMode ? ICONS.sun : ICONS.moon} className="w-5 h-5" />
                     {darkMode ? 'Light mode' : 'Dark mode'}
                   </button>
+                  <PushNotifications />
                   <a href="/settings/change-password" className="menu-item" onClick={() => setShowSettings(false)}>
                     <Icon d={ICONS.lock} className="w-5 h-5" />
                     Change password

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import type { FFmpeg as FFmpegInstance } from '@ffmpeg/ffmpeg'
 
 interface VideoEditorProps {
   file: File
@@ -15,11 +16,19 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
   const [endTime, setEndTime] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const previewUrl = useRef(URL.createObjectURL(file))
+  const [processing, setProcessing] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [error, setError] = useState('')
+  const [previewUrl, setPreviewUrl] = useState('')
+  const ffmpegRef = useRef<FFmpegInstance | null>(null)
 
   useEffect(() => {
-    return () => URL.revokeObjectURL(previewUrl.current)
-  }, [])
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  useEffect(() => () => { void ffmpegRef.current?.terminate() }, [])
 
   const handleLoaded = () => {
     const d = videoRef.current?.duration || 0
@@ -28,11 +37,13 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
   }
 
   const handleTimeUpdate = () => {
-    const t = videoRef.current?.currentTime || 0
+    const video = videoRef.current
+    if (!video) return
+    const t = video.currentTime
     setCurrentTime(t)
     if (t >= endTime) {
-      videoRef.current!.pause()
-      videoRef.current!.currentTime = startTime
+      video.pause()
+      video.currentTime = startTime
       setPlaying(false)
     }
   }
@@ -44,8 +55,7 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
       setPlaying(false)
     } else {
       videoRef.current.currentTime = startTime
-      videoRef.current.play()
-      setPlaying(true)
+      void videoRef.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
     }
   }
 
@@ -55,10 +65,66 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
     return `${m}:${sec.toString().padStart(2, '0')}`
   }
 
-  const handleDone = () => {
-    // Pass the original file with trim points
-    // Actual trimming happens server-side or on upload
-    onDone(file, startTime, endTime)
+  const handleDone = async () => {
+    if (!duration || endTime <= startTime || processing) return
+    setProcessing(true)
+    setProgress(0)
+    setError('')
+
+    try {
+      const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([
+        import('@ffmpeg/ffmpeg'),
+        import('@ffmpeg/util'),
+      ])
+      const ffmpeg = ffmpegRef.current || new FFmpeg()
+      ffmpegRef.current = ffmpeg
+      ffmpeg.on('progress', ({ progress: ratio }) => {
+        setProgress(Math.max(0, Math.min(100, Math.round(ratio * 100))))
+      })
+
+      if (!ffmpeg.loaded) {
+        const baseUrl = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd'
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseUrl}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseUrl}/ffmpeg-core.wasm`, 'application/wasm'),
+        })
+      }
+
+      const inputName = `input.${file.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || 'video'}`
+      const outputName = 'trimmed.mp4'
+      await ffmpeg.writeFile(inputName, await fetchFile(file))
+      const result = await ffmpeg.exec([
+        '-i', inputName,
+        '-ss', startTime.toFixed(3),
+        '-t', (endTime - startTime).toFixed(3),
+        '-map', '0:v:0',
+        '-map', '0:a?',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-movflags', '+faststart',
+        outputName,
+      ])
+      if (result !== 0) throw new Error('FFmpeg could not trim this video format')
+
+      const output = await ffmpeg.readFile(outputName)
+      if (typeof output === 'string') throw new Error('FFmpeg returned an invalid video file')
+      const outputBuffer = output.buffer.slice(
+        output.byteOffset,
+        output.byteOffset + output.byteLength
+      ) as ArrayBuffer
+      const trimmedFile = new File([outputBuffer], file.name.replace(/\.[^.]+$/, '') + '-trimmed.mp4', {
+        type: 'video/mp4',
+      })
+      if (!trimmedFile.size) throw new Error('The trimmed video is empty')
+      onDone(trimmedFile, startTime, endTime)
+    } catch (trimError) {
+      console.error('Video trimming failed:', trimError)
+      setError(trimError instanceof Error ? trimError.message : 'Could not trim this video')
+    } finally {
+      setProcessing(false)
+    }
   }
 
   return (
@@ -73,7 +139,7 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
         <div className="bg-black">
           <video
             ref={videoRef}
-            src={previewUrl.current}
+            src={previewUrl}
             className="w-full max-h-64 object-contain"
             onLoadedMetadata={handleLoaded}
             onTimeUpdate={handleTimeUpdate}
@@ -152,16 +218,28 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
             Trimmed clip: <strong>{fmt(endTime - startTime)}</strong> ({fmt(startTime)} → {fmt(endTime)})
           </div>
 
+          {processing && (
+            <div className="space-y-2" role="status" aria-live="polite">
+              <div className="h-2 overflow-hidden rounded-full bg-purple-100">
+                <div className="h-full rounded-full bg-purple-600 transition-all" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="text-xs text-gray-500">{progress ? `Trimming video… ${progress}%` : 'Loading video trimmer…'}</p>
+            </div>
+          )}
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+
           {/* Actions */}
           <div className="flex gap-3">
             <button
               onClick={onCancel}
+              disabled={processing}
               className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
             >Cancel</button>
             <button
-              onClick={handleDone}
-              className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700 transition"
-            >Use this clip</button>
+              onClick={() => void handleDone()}
+              disabled={processing || !duration || endTime <= startTime}
+              className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700 transition disabled:opacity-50"
+            >{processing ? 'Trimming…' : 'Trim & use clip'}</button>
           </div>
         </div>
       </div>

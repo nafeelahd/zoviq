@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import AuthShell from '@/components/auth/AuthShell'
+import AuthNotice from '@/components/auth/AuthNotice'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -22,8 +24,8 @@ export default function ForgotPasswordPage() {
   }
 
   if (sent) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, #FDF2F8 50%, #F0FDF4 100%)' }}>
-      <div className="bg-white rounded-3xl p-10 text-center shadow-xl max-w-sm w-full">
+    <AuthShell>
+      <div className="auth-card rounded-3xl p-10 text-center max-w-sm w-full">
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: '#EEF2FF' }}>
           <span className="text-3xl">📧</span>
         </div>
@@ -31,11 +33,11 @@ export default function ForgotPasswordPage() {
         <p className="text-gray-500 text-sm mb-6">We sent a password reset link to <strong>{email}</strong>. Click the link to reset your password.</p>
         <Link href="/auth/login" className="text-sm font-semibold hover:underline" style={{ color: '#6366F1' }}>Back to sign in</Link>
       </div>
-    </div>
+    </AuthShell>
   )
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, #FDF2F8 50%, #F0FDF4 100%)' }}>
+    <AuthShell>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
@@ -47,7 +49,7 @@ export default function ForgotPasswordPage() {
           <p className="text-sm" style={{ color: '#6B7280' }}>Reset your password</p>
         </div>
 
-        <div className="rounded-3xl p-8 shadow-xl border" style={{ background: 'white', borderColor: '#F0EFF8' }}>
+        <div className="auth-card rounded-3xl p-8">
           <div className="mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-1">Forgot password?</h2>
             <p className="text-sm text-gray-500">No worries! Enter your email and we'll send you a reset link.</p>
@@ -62,7 +64,7 @@ export default function ForgotPasswordPage() {
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />
             </div>
 
-            {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>}
+            {error && <AuthNotice>{error}</AuthNotice>}
 
             <button type="submit" disabled={loading}
               className="w-full text-white font-semibold py-3.5 rounded-xl text-sm transition disabled:opacity-50 shadow-md"
@@ -78,6 +80,6 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
       </div>
-    </div>
+    </AuthShell>
   )
 }

@@ -18,9 +18,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'A room name is required' }, { status: 400 })
   }
 
-  const apiKey = process.env.DAILY_API_KEY
+  const apiKey = process.env.DAILY_API_KEY || process.env.NEXT_PUBLIC_DAILY_API_KEY
   if (!apiKey) {
-    return NextResponse.json({ error: 'Daily API key is not configured. Set DAILY_API_KEY on the server.' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Daily API key is not configured. Add DAILY_API_KEY to your deployment environment and redeploy.',
+    }, { status: 500 })
   }
 
   const sanitized = roomName

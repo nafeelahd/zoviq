@@ -117,7 +117,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 DAILY_API_KEY=your_daily_api_key
 ```
 
-Never commit `.env.local`. It is already listed in `.gitignore`.
+Never commit `.env.local`. It is already listed in `.gitignore`. If your deployment still uses the old `NEXT_PUBLIC_DAILY_API_KEY` variable, the server accepts it temporarily; replace it with `DAILY_API_KEY` to keep the key private.
 
 ### 5. Run it
 
@@ -213,7 +213,7 @@ Vercel runs a strict TypeScript build, so run `npm run build` locally first to c
 - The video editor lets you pick trim points, but the uploaded file is not cut yet.
 - Delete account removes the user's data and signs them out. Removing the auth user itself needs a server-side admin call.
 - Some Row Level Security policies for groups, stories and notifications are open so development is easy. Tighten them before real users sign up.
-- Calls use the server-only `DAILY_API_KEY` environment variable. Add it to your local `.env.local` and deployment environment; never expose it with the `NEXT_PUBLIC_` prefix.
+- Calls use the server-only `DAILY_API_KEY` environment variable. Add it to your local `.env.local` and deployment environment; never expose it with the `NEXT_PUBLIC_` prefix. The old `NEXT_PUBLIC_DAILY_API_KEY` name is temporarily supported for existing deployments.
 
 ---
 

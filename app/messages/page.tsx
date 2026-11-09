@@ -352,14 +352,22 @@ export default function MessagesPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.url || !data.token) throw new Error(data.error || 'Could not create the call room')
 
-      const notificationCreated = await insertNotification(supabase, {
-        user_id: selectedUser.id,
-        actor_id: userId,
-        type: type === 'video' ? 'video_call' : 'audio_call',
-        call_room: roomName,
-        read: false,
+      const notificationRes = await fetch('/api/call/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          roomName,
+          recipientId: selectedUser.id,
+          callType: type,
+        }),
       })
-      if (!notificationCreated) throw new Error('Could not notify the other person. Check your Supabase notifications table setup.')
+      const notificationData = await notificationRes.json().catch(() => ({}))
+      if (!notificationRes.ok) {
+        throw new Error(notificationData.error || 'Could not notify the other person about the call')
+      }
 
       setRoomUrl(data.url)
       setMeetingToken(data.token)

@@ -451,11 +451,11 @@ export default function MessagesPage() {
       {incomingCall && !callType && <IncomingCall callerName={incomingCall.callerName} callType={incomingCall.callType} onAccept={acceptCall} onDecline={declineCall} />}
       {callType && roomUrl && meetingToken && <CallModal roomUrl={roomUrl} meetingToken={meetingToken} callType={callType} callerName={callName} onLeave={() => { callTypeRef.current = null; setCallType(null); setRoomUrl(''); setMeetingToken(''); setCallName('') }} />}
 
-      <main className="max-w-4xl mx-auto py-6 px-4">
-        <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: 'var(--card)', borderColor: 'var(--border)', height: '78vh' }}>
+      <main className="max-w-4xl mx-auto py-6 px-4 max-md:px-0 max-md:py-0">
+        <div className="messages-panel rounded-2xl border shadow-sm overflow-hidden max-md:rounded-none max-md:border-x-0" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex h-full">
             {/* Sidebar */}
-            <div className="w-72 flex flex-col flex-shrink-0 border-r" style={{ borderColor: 'var(--border)' }}>
+            <div className={`w-72 flex flex-col flex-shrink-0 border-r ${selectedUser ? 'hidden md:flex' : ''} max-md:w-full max-md:border-r-0`} style={{ borderColor: 'var(--border)' }}>
               <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
                 <h2 className="font-bold text-base" style={{ color: 'var(--text)' }}>Messages</h2>
               </div>
@@ -481,11 +481,16 @@ export default function MessagesPage() {
             </div>
 
             {/* Chat */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className={`flex-1 flex-col min-w-0 ${selectedUser ? 'flex' : 'hidden md:flex'}`}>
               {selectedUser ? (
                 <>
-                  <div className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: 'var(--border)' }}>
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b max-md:px-3" style={{ borderColor: 'var(--border)' }}>
                     <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => setSelectedUser(null)} aria-label="Back to conversations"
+                        className="hidden max-md:flex w-9 h-9 rounded-xl items-center justify-center"
+                        style={{ background: 'var(--hover-bg)', color: 'var(--text)' }}>
+                        ←
+                      </button>
                       <Avatar person={selectedUser} size={9} />
                       <div>
                         <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>{selectedUser.username}</p>
@@ -506,7 +511,7 @@ export default function MessagesPage() {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                  <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 max-md:px-3">
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center">
                         <p className="text-4xl mb-3">👋</p>
@@ -540,7 +545,7 @@ export default function MessagesPage() {
                     <div ref={messagesEndRef} />
                   </div>
 
-                  <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
+                  <div className="px-5 py-4 border-t max-md:px-3 max-md:py-3" style={{ borderColor: 'var(--border)' }}>
                     {messageError && <p role="alert" className="mb-2 text-xs text-red-600">{messageError}</p>}
                     {attachmentFile && (
                       <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
@@ -553,7 +558,7 @@ export default function MessagesPage() {
                         onChange={e => handleMessageChange(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
                         placeholder={`Message ${selectedUser.username}...`}
-                        className="flex-1 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
+                        className="flex-1 min-w-0 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
                         style={{ background: 'var(--input-bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
                       <label className="w-11 h-11 rounded-2xl flex items-center justify-center cursor-pointer border"
                         style={{ borderColor: 'var(--border)', color: 'var(--muted)' }} title="Attach image or video">

@@ -178,8 +178,11 @@ main > *:nth-child(n + 5) { animation-delay: 0.22s; }
 .menu-item.danger { color: #EF4444; }
 .menu-item.danger:hover { background: rgba(239, 68, 68, 0.08); }
 
+.messages-panel { height: 78vh; }
+
 @media (max-width: 767px) {
   body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .messages-panel { height: calc(100dvh - 8rem - env(safe-area-inset-bottom)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

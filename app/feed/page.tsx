@@ -6,6 +6,7 @@ import VideoEditor from '@/components/VideoEditor'
 import Stories from '@/components/Stories'
 import Navbar from '@/components/Navbar'
 import ShareModal from '@/components/ShareModal'
+import CameraCapture from '@/components/CameraCapture'
 import { insertNotification } from '@/lib/notifications'
 
 type Comment = { id: string; content: string; created_at: string; user_id: string }
@@ -34,6 +35,7 @@ export default function FeedPage() {
   const [commentText, setCommentText] = useState('')
   const [shareTarget, setShareTarget] = useState<{ url: string; title: string; type: 'post' | 'profile' | 'story' } | null>(null)
   const [savedPosts, setSavedPosts] = useState<string[]>([])
+  const [showCamera, setShowCamera] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -81,14 +83,18 @@ export default function FeedPage() {
     setLoading(false)
   }
 
-  const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleMediaFile = (file?: File) => {
     if (!file) return
     if (file.size > 50 * 1024 * 1024) { setError('Max file size is 50MB.'); return }
     const isVideo = file.type.startsWith('video/')
     setMediaFile(file); setMediaPreview(URL.createObjectURL(file))
     setMediaType(isVideo ? 'video' : 'image'); setError('')
     if (isVideo) setShowVideoEditor(true)
+  }
+
+  const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleMediaFile(e.target.files?.[0])
+    e.target.value = ''
   }
 
   const handleVideoEditorDone = (file: File, start: number, end: number) => {
@@ -188,6 +194,12 @@ export default function FeedPage() {
       {shareTarget && (
         <ShareModal url={shareTarget.url} title={shareTarget.title} type={shareTarget.type} onClose={() => setShareTarget(null)} />
       )}
+      {showCamera && (
+        <CameraCapture
+          onCapture={file => { setShowCamera(false); handleMediaFile(file) }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
       <Navbar activePage="feed" />
 
       <main className="max-w-xl mx-auto py-6 px-4">
@@ -217,9 +229,9 @@ export default function FeedPage() {
 
           <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center gap-1">
-              <button onClick={() => { if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.capture = 'environment'; fileRef.current.click() } }}
+              <button onClick={() => setShowCamera(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium hover:opacity-80 transition"
-                style={{ background: '#EEF2FF', color: '#6366F1' }}>📷 Camera</button>
+                style={{ background: '#EEF2FF', color: '#6366F1' }}>📷 Open camera</button>
               <button onClick={() => { if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.capture = 'environment'; fileRef.current.click() } }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium hover:opacity-80 transition"
                 style={{ background: '#EEF2FF', color: '#6366F1' }}>🖼️ Photo</button>

@@ -30,6 +30,7 @@ Built with Next.js, Supabase and Daily.co.
 
 **Feed**
 - Text, photo and video posts
+- Capture photos and videos directly from the camera when creating a post
 - Trim and transcode video clips before uploading
 - Likes and comments
 - Share posts and profiles (copy link, WhatsApp, X, Facebook, Telegram, native share)
@@ -37,6 +38,7 @@ Built with Next.js, Supabase and Daily.co.
 
 **Stories**
 - Photo and video stories that expire after 24 hours
+- Capture photos and videos directly from the camera when adding a story
 - All of a user's stories are grouped under one avatar
 - Tap to move forward or back, view tracking, delete your own stories
 

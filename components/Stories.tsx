@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import CameraCapture from '@/components/CameraCapture'
 
 type Story = {
   id: string
@@ -27,6 +28,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
   const [progress, setProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [showCamera, setShowCamera] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const progressRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -104,15 +106,9 @@ export default function Stories({ userId, email }: { userId: string; email: stri
     // Don't refetch during viewing to avoid disrupting progress
   }
 
-  const openStoryCamera = (kind: 'image' | 'video' = 'image') => {
-    if (!fileRef.current) return
-    fileRef.current.accept = kind === 'video' ? 'video/*' : 'image/*'
-    fileRef.current.capture = 'environment'
-    fileRef.current.click()
-  }
+  const openStoryCamera = () => setShowCamera(true)
 
-  const uploadStory = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const uploadStory = async (file?: File) => {
     if (!file) return
     setUploading(true)
     setUploadError('')
@@ -200,6 +196,12 @@ export default function Stories({ userId, email }: { userId: string; email: stri
 
   return (
     <>
+      {showCamera && (
+        <CameraCapture
+          onCapture={file => { setShowCamera(false); void uploadStory(file) }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
       {/* Story viewer */}
       {viewingUser && currentStory && (
         <div className="fixed inset-0 bg-black z-50 flex items-center justify-center" onClick={() => { setViewingUser(null); setStoryIndex(0) }}>
@@ -288,7 +290,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
             <span className="text-xs" style={{ color: '#9CA3AF' }}>
               {myStories ? `Your story (${myStories.stories.length})` : 'Your story'}
             </span>
-            <input ref={fileRef} type="file" accept="image/*,video/*" onChange={uploadStory} className="hidden" />
+            <input ref={fileRef} type="file" accept="image/*,video/*" onChange={e => { void uploadStory(e.target.files?.[0]); e.target.value = '' }} className="hidden" />
           </div>
 
           {/* Other users' stories */}

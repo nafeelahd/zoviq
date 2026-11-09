@@ -145,9 +145,9 @@ export default function Navbar({ activePage }: NavbarProps) {
   return (
     <>
       {/* Top bar */}
-      <nav className="glass-nav sticky top-0 z-40">
+      <nav aria-label="Main navigation" className="glass-nav sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-4">
-          <a href="/feed" className="flex items-center gap-2.5 flex-shrink-0">
+          <a href="/feed" className="nav-brand flex items-center gap-2.5 flex-shrink-0" aria-label="Zoviq home">
             <svg width="34" height="34" viewBox="0 0 100 100" fill="none">
               <defs>
                 <linearGradient id="navGrad" x1="0" y1="0" x2="1" y2="1">
@@ -162,9 +162,11 @@ export default function Navbar({ activePage }: NavbarProps) {
           </a>
 
           {/* Desktop pill navigation */}
-          <div className="hidden md:flex items-center gap-1 p-1 rounded-2xl" style={{ background: 'var(--pill-bg)' }}>
+          <div className="desktop-nav hidden md:flex items-center gap-1 p-1 rounded-2xl">
             {desktopItems.map(item => (
               <a key={item.key} href={item.href} title={item.label}
+                aria-label={item.label}
+                aria-current={activePage === item.key ? 'page' : undefined}
                 className={`nav-pill ${activePage === item.key ? 'active' : ''}`}>
                 <Icon d={item.icon} />
                 <Badge count={item.badge || 0} />
@@ -175,8 +177,8 @@ export default function Navbar({ activePage }: NavbarProps) {
           <div className="flex items-center gap-1">
             {/* Mobile quick actions */}
             <div className="flex md:hidden items-center gap-1">
-              <a href="/search" className="icon-btn" title="Search"><Icon d={ICONS.search} /></a>
-              <a href="/notifications" className="icon-btn" title="Notifications">
+              <a href="/search" className="icon-btn" title="Search" aria-label="Search"><Icon d={ICONS.search} /></a>
+              <a href="/notifications" className="icon-btn" title="Notifications" aria-label="Notifications">
                 <Icon d={ICONS.bell} />
                 <Badge count={unreadNotifs} />
               </a>
@@ -184,7 +186,8 @@ export default function Navbar({ activePage }: NavbarProps) {
 
             {/* Desktop profile */}
             <div className="hidden md:block">
-              <a href="/profile" className="icon-btn" title="Profile"
+              <a href="/profile" className="icon-btn" title="Profile" aria-label="Profile"
+                aria-current={activePage === 'profile' ? 'page' : undefined}
                 style={activePage === 'profile' ? { color: '#6366F1', background: 'var(--hover-bg)' } : {}}>
                 <Icon d={ICONS.user} />
               </a>
@@ -193,6 +196,7 @@ export default function Navbar({ activePage }: NavbarProps) {
             {/* Settings */}
             <div className="relative" ref={settingsRef}>
               <button onClick={() => setShowSettings(!showSettings)} className="icon-btn" title="Settings"
+                aria-label="Settings" aria-expanded={showSettings}
                 style={showSettings ? { color: '#6366F1', background: 'var(--hover-bg)' } : {}}>
                 <Icon d={ICONS.cog} />
               </button>
@@ -229,7 +233,9 @@ export default function Navbar({ activePage }: NavbarProps) {
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 glass-nav-bottom" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex items-center justify-around h-16 px-2">
           {mobileTabs.map(item => (
-            <a key={item.key} href={item.href} className={`tab-item ${activePage === item.key ? 'active' : ''}`}>
+            <a key={item.key} href={item.href}
+              aria-current={activePage === item.key ? 'page' : undefined}
+              className={`tab-item ${activePage === item.key ? 'active' : ''}`}>
               <span className="relative">
                 <Icon d={item.icon} className="w-6 h-6" />
                 <Badge count={item.badge || 0} />

@@ -306,11 +306,11 @@ export default function GroupsPage() {
         <CallModal roomUrl={roomUrl} meetingToken={meetingToken} callType={callType} callerName={selectedGroup?.name || 'Group'} onLeave={() => { setCallType(null); setRoomUrl(''); setMeetingToken('') }} />
       )}
 
-      <main className="max-w-5xl mx-auto py-6 px-4">
-        <div className="flex gap-5">
+      <main className="max-w-5xl mx-auto py-6 px-4 max-md:px-0 max-md:py-0">
+        <div className="groups-layout flex gap-5">
 
           {/* Left sidebar */}
-          <div className="w-72 flex-shrink-0 space-y-3">
+          <div className={`w-72 flex-shrink-0 space-y-3 ${selectedGroup ? 'hidden md:block' : ''} max-md:w-full max-md:px-3 max-md:py-4`}>
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Groups</h1>
               <GradBtn onClick={() => setShowCreate(true)} className="px-3 py-1.5 text-sm flex items-center gap-1">
@@ -397,16 +397,21 @@ export default function GroupsPage() {
           </div>
 
           {/* Chat panel */}
-          <div className="flex-1">
+          <div className={`flex-1 min-w-0 ${selectedGroup ? 'block' : 'hidden md:block'}`}>
             {selectedGroup ? (
-              <div className="rounded-2xl border shadow-sm overflow-hidden flex flex-col" style={{ background: 'var(--card)', borderColor: 'var(--border)', height: '80vh' }}>
+              <div className="groups-chat-panel rounded-2xl border shadow-sm overflow-hidden flex flex-col max-md:rounded-none max-md:border-x-0" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: 'var(--border)' }}>
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:px-3 max-md:py-3" style={{ borderColor: 'var(--border)' }}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button type="button" onClick={() => setSelectedGroup(null)} aria-label="Back to groups"
+                      className="hidden max-md:flex w-9 h-9 rounded-xl items-center justify-center flex-shrink-0"
+                      style={{ background: 'var(--hover-bg)', color: 'var(--text)' }}>
+                      ←
+                    </button>
                     <GroupAvatar group={selectedGroup} size={10} />
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="font-bold text-sm" style={{ color: 'var(--text)' }}>{selectedGroup.name}</p>
+                        <p className="font-bold text-sm truncate" style={{ color: 'var(--text)' }}>{selectedGroup.name}</p>
                         {selectedGroup.privacy === 'private' && <span className="text-xs">🔒</span>}
                         {isAdmin && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: '#EEF2FF', color: '#6366F1' }}>Admin</span>}
                       </div>
@@ -414,7 +419,7 @@ export default function GroupsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 max-md:justify-end max-md:overflow-x-auto">
                     {isAdmin && joinRequests.length > 0 && (
                       <button onClick={() => setShowRequests(true)}
                         className="text-xs px-3 py-1.5 rounded-xl font-semibold"
@@ -444,7 +449,7 @@ export default function GroupsPage() {
                 {callError && <p role="alert" className="px-5 py-2 text-sm text-red-600">{callError}</p>}
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 max-md:px-3">
                   {!selectedGroup.is_member ? (
                     <div className="flex items-center justify-center h-full text-center">
                       <div>
@@ -487,13 +492,13 @@ export default function GroupsPage() {
 
                 {/* Input */}
                 {selectedGroup.is_member && (
-                  <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
+                  <div className="px-5 py-4 border-t max-md:px-3 max-md:py-3" style={{ borderColor: 'var(--border)' }}>
                     {sendError && <p className="text-red-500 text-xs mb-2">{sendError}</p>}
                     <div className="flex gap-3 items-center">
                       <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && sendMessage()}
                         placeholder={`Message ${selectedGroup.name}...`}
-                        className="flex-1 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
+                        className="flex-1 min-w-0 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
                         style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
                       <GradBtn onClick={sendMessage} disabled={!newMessage.trim() || sending} className="w-11 h-11 flex items-center justify-center shadow-md flex-shrink-0">
                         {sending ? '...' : '➤'}
@@ -503,7 +508,7 @@ export default function GroupsPage() {
                 )}
               </div>
             ) : (
-              <div className="rounded-2xl border shadow-sm flex items-center justify-center text-center" style={{ background: 'var(--card)', borderColor: 'var(--border)', height: '80vh' }}>
+              <div className="groups-chat-panel rounded-2xl border shadow-sm flex items-center justify-center text-center" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                 <div>
                   <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg" style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                     <span className="text-3xl">👥</span>

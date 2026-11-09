@@ -21,7 +21,9 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const authorization = request.headers.get('authorization')
+  const accessToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]
+  const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
   if (authError || !user) {
     return NextResponse.json({ error: 'You must be signed in to join a call' }, { status: 401 })
   }

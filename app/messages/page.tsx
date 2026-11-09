@@ -336,12 +336,22 @@ export default function MessagesPage() {
     setStartingCall(true)
     setCallError('')
     try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('You must be signed in to start a call')
+
       const roomName = `dm-${[userId, selectedUser.id].sort().join('-')}`
-      const res = await fetch('/api/call', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomName }) })
+      const res = await fetch('/api/call', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ roomName }),
+      })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.url || !data.token) throw new Error(data.error || 'Could not create the call room')
 
-      const supabase = createClient()
       const notificationCreated = await insertNotification(supabase, {
         user_id: selectedUser.id,
         actor_id: userId,
@@ -367,9 +377,16 @@ export default function MessagesPage() {
     if (!incomingCall) return
     setCallError('')
     try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('You must be signed in to accept a call')
+
       const res = await fetch('/api/call', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ roomName: incomingCall.roomName }),
       })
       const callData = await res.json().catch(() => ({}))
@@ -377,7 +394,6 @@ export default function MessagesPage() {
         throw new Error(callData.error || 'Could not authorize this call')
       }
 
-      const supabase = createClient()
       const { error } = await supabase.from('notifications').update({ read: true }).eq('id', incomingCall.notifId)
       if (error) throw new Error(`Could not accept call: ${error.message}`)
 

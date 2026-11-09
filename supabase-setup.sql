@@ -28,6 +28,11 @@ begin
   if to_regclass('public.messages') is not null then
     alter table public.messages add column if not exists image_url text;
     alter table public.messages add column if not exists video_url text;
+    alter table public.messages add column if not exists audio_url text;
+  end if;
+
+  if to_regclass('public.group_messages') is not null then
+    alter table public.group_messages add column if not exists audio_url text;
   end if;
 end;
 $$;

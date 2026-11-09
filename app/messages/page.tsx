@@ -9,7 +9,7 @@ import IncomingCall from '@/components/IncomingCall'
 import { insertNotification } from '@/lib/notifications'
 
 type Profile = { id: string; username: string; avatar_url: string | null; last_seen: string | null }
-type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; video_url: string | null; read: boolean; created_at: string }
+type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; video_url: string | null; audio_url: string | null; read: boolean; created_at: string }
 
 export default function MessagesPage() {
   const [userId, setUserId] = useState('')
@@ -18,7 +18,10 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [attachmentKind, setAttachmentKind] = useState<'image' | 'video' | 'audio' | null>(null)
   const [messageError, setMessageError] = useState('')
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const [voiceSeconds, setVoiceSeconds] = useState(0)
   const [otherTyping, setOtherTyping] = useState(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -42,6 +45,10 @@ export default function MessagesPage() {
   const typingSubscribedRef = useRef(false)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const otherTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const audioRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioStreamRef = useRef<MediaStream | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const voiceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   incomingCallRef.current = incomingCall
   callTypeRef.current = callType
@@ -70,6 +77,18 @@ export default function MessagesPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    return () => {
+      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current)
+      if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+        audioRecorderRef.current.stop()
+      }
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [])
 
   useEffect(() => {
     selectedUserRef.current = selectedUser
@@ -185,19 +204,78 @@ export default function MessagesPage() {
     event.target.value = ''
     if (!file) return
     setAttachmentFile(null)
+    setAttachmentKind(null)
+
     const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'].includes(file.type)
     const isVideo = ['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v'].includes(file.type)
-    if (!isImage && !isVideo) {
-      setMessageError('Choose a JPEG, PNG, GIF, WebP, AVIF, MP4, WebM, MOV, or OGG file.')
+    const isAudio = ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/webm', 'audio/ogg', 'audio/wav', 'audio/x-wav'].includes(file.type)
+    if (!isImage && !isVideo && !isAudio) {
+      setMessageError('Choose a JPEG, PNG, GIF, WebP, AVIF, MP4, WebM, MOV, OGG, MP3, M4A, WAV, or voice recording file.')
       return
     }
-    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024
+    const maxSize = isVideo ? 50 * 1024 * 1024 : isAudio ? 20 * 1024 * 1024 : 10 * 1024 * 1024
     if (file.size > maxSize) {
-      setMessageError(isVideo ? 'Videos must be 50 MB or smaller.' : 'Images must be 10 MB or smaller.')
+      setMessageError(isVideo ? 'Videos must be 50 MB or smaller.' : isAudio ? 'Voice notes must be 20 MB or smaller.' : 'Images must be 10 MB or smaller.')
       return
     }
+    setAttachmentKind(isAudio ? 'audio' : isVideo ? 'video' : 'image')
     setMessageError('')
     setAttachmentFile(file)
+  }
+
+  const startVoiceRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMessageError('Voice recording is not supported in this browser.')
+      return
+    }
+
+    try {
+      setMessageError('')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data)
+      }
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        if (audioBlob.size === 0) {
+          setAttachmentFile(null)
+          setAttachmentKind(null)
+          return
+        }
+        const extension = audioBlob.type.includes('mp4') ? 'm4a' : audioBlob.type.includes('ogg') ? 'ogg' : audioBlob.type.includes('wav') ? 'wav' : 'webm'
+        const file = new File([audioBlob], `voice-message-${Date.now()}.${extension}`, { type: audioBlob.type || 'audio/webm' })
+        setAttachmentFile(file)
+        setAttachmentKind('audio')
+        stream.getTracks().forEach(track => track.stop())
+      }
+      recorder.start()
+      audioRecorderRef.current = recorder
+      audioStreamRef.current = stream
+      setIsRecordingVoice(true)
+      setVoiceSeconds(0)
+      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current)
+      voiceTimerRef.current = setInterval(() => setVoiceSeconds(value => value + 1), 1000)
+    } catch (error) {
+      console.error('Could not start voice recording:', error)
+      setMessageError('Microphone access was denied or unavailable.')
+    }
+  }
+
+  const stopVoiceRecording = () => {
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current)
+      voiceTimerRef.current = null
+    }
+    if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+      audioRecorderRef.current.stop()
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop())
+      audioStreamRef.current = null
+    }
+    setIsRecordingVoice(false)
   }
 
   const sendMessage = async () => {
@@ -213,6 +291,7 @@ export default function MessagesPage() {
     try {
       let imageUrl: string | null = null
       let videoUrl: string | null = null
+      let audioUrl: string | null = null
       if (attachmentFile) {
         const imageExtensions: Record<string, string> = {
           'image/jpeg': 'jpg',
@@ -228,8 +307,18 @@ export default function MessagesPage() {
           'video/ogg': 'ogv',
           'video/x-m4v': 'm4v',
         }
+        const audioExtensions: Record<string, string> = {
+          'audio/mpeg': 'mp3',
+          'audio/mp3': 'mp3',
+          'audio/mp4': 'm4a',
+          'audio/webm': 'webm',
+          'audio/ogg': 'ogg',
+          'audio/wav': 'wav',
+          'audio/x-wav': 'wav',
+        }
         const isVideo = attachmentFile.type.startsWith('video/')
-        const extension = (isVideo ? videoExtensions : imageExtensions)[attachmentFile.type]
+        const isAudio = attachmentFile.type.startsWith('audio/') || attachmentKind === 'audio'
+        const extension = isVideo ? videoExtensions[attachmentFile.type] : isAudio ? audioExtensions[attachmentFile.type] : imageExtensions[attachmentFile.type]
         if (!extension) throw new Error('Unsupported attachment type')
         const path = `messages/${userId}/${selectedUser.id}/${Date.now()}.${extension}`
         const { error: uploadError } = await supabase.storage.from('posts').upload(path, attachmentFile, {
@@ -240,7 +329,8 @@ export default function MessagesPage() {
         if (uploadError) throw new Error(`Could not upload attachment: ${uploadError.message}`)
         uploadedAttachmentPath = path
         const publicUrl = supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
-        if (isVideo) videoUrl = publicUrl
+        if (isAudio) audioUrl = publicUrl
+        else if (isVideo) videoUrl = publicUrl
         else imageUrl = publicUrl
       }
 
@@ -249,9 +339,10 @@ export default function MessagesPage() {
         .insert({
           sender_id: userId,
           receiver_id: selectedUser.id,
-          content: text || (imageUrl ? '📷 Image' : videoUrl ? '📹 Video' : ''),
+          content: text || (audioUrl ? '🎙️ Voice message' : imageUrl ? '📷 Image' : videoUrl ? '📹 Video' : ''),
           image_url: imageUrl,
           video_url: videoUrl,
+          audio_url: audioUrl,
         })
         .select()
         .single()
@@ -261,6 +352,8 @@ export default function MessagesPage() {
       setMessages(prev => [...prev, inserted])
       setNewMessage('')
       setAttachmentFile(null)
+      setAttachmentKind(null)
+      setVoiceSeconds(0)
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
       await insertNotification(supabase, { user_id: selectedUser.id, actor_id: userId, type: 'message' })
     } catch (error) {
@@ -527,7 +620,8 @@ export default function MessagesPage() {
                               style={isMe ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' } : { background: 'var(--hover-bg)', color: 'var(--text)' }}>
                               {msg.image_url && <a href={msg.image_url} target="_blank" rel="noreferrer"><img src={msg.image_url} alt="Image attachment" className="max-h-64 max-w-full object-contain" /></a>}
                               {msg.video_url && <video src={msg.video_url} controls playsInline preload="metadata" className="max-h-64 max-w-full bg-black" aria-label="Video attachment" />}
-                              {msg.content && msg.content !== '📷 Image' && msg.content !== '📹 Video' && <p className="px-4 py-2.5">{msg.content}</p>}
+                              {msg.audio_url && <audio src={msg.audio_url} controls className="max-w-full" style={{ maxWidth: 240 }} />}
+                              {msg.content && msg.content !== '📷 Image' && msg.content !== '📹 Video' && msg.content !== '🎙️ Voice message' && <p className="px-4 py-2.5">{msg.content}</p>}
                             </div>
                             <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                               <p className="text-xs" style={{ color: 'var(--muted)' }}>{timeAgo(msg.created_at)}</p>
@@ -549,8 +643,8 @@ export default function MessagesPage() {
                     {messageError && <p role="alert" className="mb-2 text-xs text-red-600">{messageError}</p>}
                     {attachmentFile && (
                       <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
-                        <span className="truncate">{attachmentFile.type.startsWith('video/') ? 'Video' : 'Image'}: {attachmentFile.name}</span>
-                        <button type="button" onClick={() => setAttachmentFile(null)} aria-label="Remove attachment" className="text-red-500">Remove</button>
+                        <span className="truncate">{attachmentKind === 'audio' ? 'Voice note' : attachmentKind === 'video' ? 'Video' : 'Image'}: {attachmentFile.name}</span>
+                        <button type="button" onClick={() => { setAttachmentFile(null); setAttachmentKind(null) }} aria-label="Remove attachment" className="text-red-500">Remove</button>
                       </div>
                     )}
                     <div className="flex gap-3 items-center">
@@ -560,10 +654,17 @@ export default function MessagesPage() {
                         placeholder={`Message ${selectedUser.username}...`}
                         className="flex-1 min-w-0 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
                         style={{ background: 'var(--input-bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      <button type="button" onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
+                        className={`w-11 h-11 rounded-2xl flex items-center justify-center border transition ${isRecordingVoice ? 'animate-pulse' : ''}`}
+                        style={{ borderColor: isRecordingVoice ? '#F43F5E' : 'var(--border)', background: isRecordingVoice ? '#FEE2E2' : 'var(--input-bg)', color: isRecordingVoice ? '#DC2626' : 'var(--muted)' }}
+                        title={isRecordingVoice ? 'Stop voice message' : 'Record voice message'}>
+                        <span aria-hidden="true">{isRecordingVoice ? '■' : '🎙️'}</span>
+                      </button>
+                      {isRecordingVoice && <span className="text-xs font-medium" style={{ color: '#DC2626' }}>{voiceSeconds}s</span>}
                       <label className="w-11 h-11 rounded-2xl flex items-center justify-center cursor-pointer border"
-                        style={{ borderColor: 'var(--border)', color: 'var(--muted)' }} title="Attach image or video">
+                        style={{ borderColor: 'var(--border)', color: 'var(--muted)' }} title="Attach image, video, or audio">
                         <span aria-hidden="true">📎</span>
-                        <input type="file" accept="image/*,video/*" onChange={selectAttachment} className="hidden" />
+                        <input type="file" accept="image/*,video/*,audio/*" onChange={selectAttachment} className="hidden" />
                       </label>
                       <button onClick={sendMessage} disabled={(!newMessage.trim() && !attachmentFile) || sending}
                         className="w-11 h-11 rounded-2xl flex items-center justify-center text-white transition hover:opacity-90 disabled:opacity-40 shadow-md flex-shrink-0"

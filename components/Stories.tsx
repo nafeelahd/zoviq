@@ -104,6 +104,13 @@ export default function Stories({ userId, email }: { userId: string; email: stri
     // Don't refetch during viewing to avoid disrupting progress
   }
 
+  const openStoryCamera = (kind: 'image' | 'video' = 'image') => {
+    if (!fileRef.current) return
+    fileRef.current.accept = kind === 'video' ? 'video/*' : 'image/*'
+    fileRef.current.capture = 'environment'
+    fileRef.current.click()
+  }
+
   const uploadStory = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -262,14 +269,14 @@ export default function Stories({ userId, email }: { userId: string; email: stri
                     : <span className="font-bold text-lg" style={{ color: '#6366F1' }}>{email[0]?.toUpperCase()}</span>
                   }
                 </div>
-                <div onClick={(e) => { e.stopPropagation(); fileRef.current?.click() }}
+                <div onClick={(e) => { e.stopPropagation(); openStoryCamera() }}
                   className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white cursor-pointer"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                   <span className="text-white text-xs font-bold">+</span>
                 </div>
               </button>
             ) : (
-              <button onClick={() => fileRef.current?.click()} disabled={uploading}
+              <button onClick={() => openStoryCamera()} disabled={uploading}
                 className="relative w-14 h-14 rounded-full border-2 border-dashed flex items-center justify-center transition overflow-hidden"
                 style={{ borderColor: '#C7D2FE', background: '#EEF2FF' }}>
                 {uploading

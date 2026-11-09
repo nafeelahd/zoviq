@@ -33,7 +33,17 @@ export default function FeedPage() {
   const [openComments, setOpenComments] = useState<string | null>(null)
   const [commentText, setCommentText] = useState('')
   const [shareTarget, setShareTarget] = useState<{ url: string; title: string; type: 'post' | 'profile' | 'story' } | null>(null)
+  const [savedPosts, setSavedPosts] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const stored = JSON.parse(window.localStorage.getItem('zoviq-saved-posts') || '[]') as string[]
+    setSavedPosts(stored)
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem('zoviq-saved-posts', JSON.stringify(savedPosts))
+  }, [savedPosts])
 
   useEffect(() => {
     const supabase = createClient()
@@ -151,6 +161,10 @@ export default function FeedPage() {
     fetchPosts()
   }
 
+  const toggleSavePost = (postId: string) => {
+    setSavedPosts(prev => prev.includes(postId) ? prev.filter(id => id !== postId) : [postId, ...prev])
+  }
+
   const timeAgo = (date: string) => {
     const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
     if (s < 60) return 'just now'
@@ -203,10 +217,13 @@ export default function FeedPage() {
 
           <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center gap-1">
-              <button onClick={() => { if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.click() } }}
+              <button onClick={() => { if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.capture = 'environment'; fileRef.current.click() } }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium hover:opacity-80 transition"
-                style={{ background: '#EEF2FF', color: '#6366F1' }}>📷 Photo</button>
-              <button onClick={() => { if (fileRef.current) { fileRef.current.accept = 'video/*'; fileRef.current.click() } }}
+                style={{ background: '#EEF2FF', color: '#6366F1' }}>📷 Camera</button>
+              <button onClick={() => { if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.capture = 'environment'; fileRef.current.click() } }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium hover:opacity-80 transition"
+                style={{ background: '#EEF2FF', color: '#6366F1' }}>🖼️ Photo</button>
+              <button onClick={() => { if (fileRef.current) { fileRef.current.accept = 'video/*'; fileRef.current.capture = 'environment'; fileRef.current.click() } }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium hover:opacity-80 transition"
                 style={{ background: '#FDF2F8', color: '#EC4899' }}>🎬 Video</button>
               <input ref={fileRef} type="file" accept="image/*,video/*" onChange={handleMediaChange} className="hidden" />
@@ -282,6 +299,11 @@ export default function FeedPage() {
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition hover:bg-gray-50"
                       style={{ color: showComments ? '#6366F1' : '#9CA3AF' }}>
                       💬 {commentCount > 0 ? commentCount : 'Comment'}
+                    </button>
+                    <button onClick={() => toggleSavePost(post.id)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition hover:bg-gray-50"
+                      style={{ color: savedPosts.includes(post.id) ? '#6366F1' : 'var(--muted)' }}>
+                      {savedPosts.includes(post.id) ? '🔖 Saved' : '📑 Save'}
                     </button>
                     <button onClick={() => setShareTarget({ url: `/feed`, title: `Check out this post on Zoviq!`, type: 'post' })}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition hover:bg-gray-50 ml-auto"

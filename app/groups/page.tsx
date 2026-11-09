@@ -7,7 +7,7 @@ import CallModal from '@/components/CallModal'
 import { insertNotification, insertNotifications } from '@/lib/notifications'
 
 type Group = { id: string; name: string; description: string | null; image_url: string | null; created_by: string; created_at: string; privacy: 'public' | 'private'; member_count: number; is_member: boolean; request_status: 'none' | 'pending' | 'accepted' }
-type GroupMessage = { id: string; content: string; created_at: string; user_id: string; username: string }
+type GroupMessage = { id: string; content: string; created_at: string; user_id: string; username: string; audio_url: string | null }
 type Member = { id: string; user_id: string; role: string; username: string; avatar_url: string | null }
 type JoinRequest = { id: string; user_id: string; username: string; created_at: string }
 
@@ -20,8 +20,12 @@ export default function GroupsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
   const [newMessage, setNewMessage] = useState('')
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [attachmentKind, setAttachmentKind] = useState<'image' | 'video' | 'audio' | null>(null)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const [voiceSeconds, setVoiceSeconds] = useState(0)
   const [showCreate, setShowCreate] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
   const [showRequests, setShowRequests] = useState(false)
@@ -41,6 +45,10 @@ export default function GroupsPage() {
   const [callError, setCallError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
+  const audioRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioStreamRef = useRef<MediaStream | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const voiceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -64,6 +72,18 @@ export default function GroupsPage() {
   }, [])
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  useEffect(() => {
+    return () => {
+      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current)
+      if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+        audioRecorderRef.current.stop()
+      }
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!selectedGroup || !userId) return
@@ -200,17 +220,155 @@ export default function GroupsPage() {
     setSelectedGroup(null); fetchGroups(userId)
   }
 
+  const selectAttachment = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setAttachmentFile(null)
+    setAttachmentKind(null)
+
+    const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'].includes(file.type)
+    const isVideo = ['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v'].includes(file.type)
+    const isAudio = ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/webm', 'audio/ogg', 'audio/wav', 'audio/x-wav'].includes(file.type)
+    if (!isImage && !isVideo && !isAudio) {
+      setSendError('Choose a JPEG, PNG, GIF, WebP, AVIF, MP4, WebM, MOV, OGG, MP3, M4A, WAV, or voice recording file.')
+      return
+    }
+
+    const maxSize = isVideo ? 50 * 1024 * 1024 : isAudio ? 20 * 1024 * 1024 : 10 * 1024 * 1024
+    if (file.size > maxSize) {
+      setSendError(isVideo ? 'Videos must be 50 MB or smaller.' : isAudio ? 'Voice notes must be 20 MB or smaller.' : 'Images must be 10 MB or smaller.')
+      return
+    }
+
+    setAttachmentKind(isAudio ? 'audio' : isVideo ? 'video' : 'image')
+    setSendError('')
+    setAttachmentFile(file)
+  }
+
+  const startVoiceRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setSendError('Voice recording is not supported in this browser.')
+      return
+    }
+
+    try {
+      setSendError('')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data)
+      }
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        if (audioBlob.size === 0) {
+          setAttachmentFile(null)
+          setAttachmentKind(null)
+          return
+        }
+        const extension = audioBlob.type.includes('mp4') ? 'm4a' : audioBlob.type.includes('ogg') ? 'ogg' : audioBlob.type.includes('wav') ? 'wav' : 'webm'
+        const file = new File([audioBlob], `voice-message-${Date.now()}.${extension}`, { type: audioBlob.type || 'audio/webm' })
+        setAttachmentFile(file)
+        setAttachmentKind('audio')
+        stream.getTracks().forEach(track => track.stop())
+      }
+      recorder.start()
+      audioRecorderRef.current = recorder
+      audioStreamRef.current = stream
+      setIsRecordingVoice(true)
+      setVoiceSeconds(0)
+      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current)
+      voiceTimerRef.current = setInterval(() => setVoiceSeconds(value => value + 1), 1000)
+    } catch (error) {
+      console.error('Could not start voice recording:', error)
+      setSendError('Microphone access was denied or unavailable.')
+    }
+  }
+
+  const stopVoiceRecording = () => {
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current)
+      voiceTimerRef.current = null
+    }
+    if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+      audioRecorderRef.current.stop()
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop())
+      audioStreamRef.current = null
+    }
+    setIsRecordingVoice(false)
+  }
+
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedGroup) return
+    if ((!newMessage.trim() && !attachmentFile) || !selectedGroup) return
     setSending(true); setSendError('')
     const supabase = createClient()
-    const { error } = await supabase.from('group_messages').insert({ group_id: selectedGroup.id, user_id: userId, content: newMessage.trim() })
-    if (error) { setSendError('Failed: ' + error.message); setSending(false); return }
-    const otherMembers = members.filter(m => m.user_id !== userId)
-    for (const member of otherMembers) {
-      await insertNotification(supabase, { user_id: member.user_id, actor_id: userId, type: 'group_message', group_id: selectedGroup.id })
+    let uploadedAttachmentPath: string | null = null
+    try {
+      let audioUrl: string | null = null
+      if (attachmentFile) {
+        const isVideo = attachmentFile.type.startsWith('video/')
+        const isAudio = attachmentFile.type.startsWith('audio/') || attachmentKind === 'audio'
+        const imageExtensions: Record<string, string> = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/gif': 'gif',
+          'image/webp': 'webp',
+          'image/avif': 'avif',
+        }
+        const videoExtensions: Record<string, string> = {
+          'video/mp4': 'mp4',
+          'video/webm': 'webm',
+          'video/quicktime': 'mov',
+          'video/ogg': 'ogv',
+          'video/x-m4v': 'm4v',
+        }
+        const audioExtensions: Record<string, string> = {
+          'audio/mpeg': 'mp3',
+          'audio/mp3': 'mp3',
+          'audio/mp4': 'm4a',
+          'audio/webm': 'webm',
+          'audio/ogg': 'ogg',
+          'audio/wav': 'wav',
+          'audio/x-wav': 'wav',
+        }
+        const extension = isVideo ? videoExtensions[attachmentFile.type] : isAudio ? audioExtensions[attachmentFile.type] : imageExtensions[attachmentFile.type]
+        if (!extension) throw new Error('Unsupported attachment type')
+        const path = `group-messages/${userId}/${selectedGroup.id}/${Date.now()}.${extension}`
+        const { error: uploadError } = await supabase.storage.from('posts').upload(path, attachmentFile, {
+          cacheControl: '3600',
+          contentType: attachmentFile.type,
+          upsert: false,
+        })
+        if (uploadError) throw new Error(`Could not upload attachment: ${uploadError.message}`)
+        uploadedAttachmentPath = path
+        const publicUrl = supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
+        if (isAudio) audioUrl = publicUrl
+      }
+
+      const { error } = await supabase.from('group_messages').insert({
+        group_id: selectedGroup.id,
+        user_id: userId,
+        content: newMessage.trim() || (audioUrl ? '🎙️ Voice message' : ''),
+        audio_url: audioUrl,
+      })
+      if (error) { setSendError('Failed: ' + error.message); return }
+      const otherMembers = members.filter(m => m.user_id !== userId)
+      for (const member of otherMembers) {
+        await insertNotification(supabase, { user_id: member.user_id, actor_id: userId, type: 'group_message', group_id: selectedGroup.id })
+      }
+      setNewMessage(''); setAttachmentFile(null); setAttachmentKind(null); setVoiceSeconds(0); setSending(false); fetchMessages(selectedGroup.id)
+    } catch (error) {
+      if (uploadedAttachmentPath) {
+        const { error: cleanupError } = await supabase.storage.from('posts').remove([uploadedAttachmentPath])
+        if (cleanupError) console.error('Could not remove unsent group message attachment:', cleanupError)
+      }
+      console.error('Could not send group message:', error)
+      setSendError(error instanceof Error ? error.message : 'Could not send message')
+      setSending(false)
     }
-    setNewMessage(''); setSending(false); fetchMessages(selectedGroup.id)
   }
 
   const startGroupCall = async (type: 'video' | 'audio') => {
@@ -478,10 +636,11 @@ export default function GroupsPage() {
                         {!isMe && <UserAvatar username={msg.username} size={8} />}
                         <div className="max-w-xs">
                           {!isMe && <p className="text-xs mb-1 ml-1" style={{ color: 'var(--muted)' }}>{msg.username}</p>}
-                          <div className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
+                          <div className={`overflow-hidden rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
                             style={isMe ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' } : { background: '#F3F4F6', color: 'var(--text)' }}>
-                            <p>{msg.content}</p>
-                            <p className="text-xs mt-1" style={{ color: isMe ? 'rgba(255,255,255,0.6)' : '#9CA3AF' }}>{timeAgo(msg.created_at)}</p>
+                            {msg.audio_url && <audio src={msg.audio_url} controls className="max-w-full" style={{ maxWidth: 240 }} />}
+                            {msg.content && msg.content !== '🎙️ Voice message' && <p className="px-4 py-2.5">{msg.content}</p>}
+                            <p className="px-4 pb-2.5 text-xs" style={{ color: isMe ? 'rgba(255,255,255,0.6)' : '#9CA3AF' }}>{timeAgo(msg.created_at)}</p>
                           </div>
                         </div>
                       </div>
@@ -494,13 +653,31 @@ export default function GroupsPage() {
                 {selectedGroup.is_member && (
                   <div className="px-5 py-4 border-t max-md:px-3 max-md:py-3" style={{ borderColor: 'var(--border)' }}>
                     {sendError && <p className="text-red-500 text-xs mb-2">{sendError}</p>}
+                    {attachmentFile && (
+                      <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
+                        <span className="truncate">{attachmentKind === 'audio' ? 'Voice note' : attachmentKind === 'video' ? 'Video' : 'Image'}: {attachmentFile.name}</span>
+                        <button type="button" onClick={() => { setAttachmentFile(null); setAttachmentKind(null) }} className="text-red-500">Remove</button>
+                      </div>
+                    )}
                     <div className="flex gap-3 items-center">
                       <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && sendMessage()}
                         placeholder={`Message ${selectedGroup.name}...`}
                         className="flex-1 min-w-0 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 border"
                         style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                      <GradBtn onClick={sendMessage} disabled={!newMessage.trim() || sending} className="w-11 h-11 flex items-center justify-center shadow-md flex-shrink-0">
+                      <button type="button" onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
+                        className={`w-11 h-11 rounded-2xl flex items-center justify-center border transition ${isRecordingVoice ? 'animate-pulse' : ''}`}
+                        style={{ borderColor: isRecordingVoice ? '#F43F5E' : 'var(--border)', background: isRecordingVoice ? '#FEE2E2' : 'var(--input-bg)', color: isRecordingVoice ? '#DC2626' : 'var(--muted)' }}
+                        title={isRecordingVoice ? 'Stop voice message' : 'Record voice message'}>
+                        <span aria-hidden="true">{isRecordingVoice ? '■' : '🎙️'}</span>
+                      </button>
+                      {isRecordingVoice && <span className="text-xs font-medium" style={{ color: '#DC2626' }}>{voiceSeconds}s</span>}
+                      <label className="w-11 h-11 rounded-2xl flex items-center justify-center cursor-pointer border"
+                        style={{ borderColor: 'var(--border)', color: 'var(--muted)' }} title="Attach image, video, or audio">
+                        <span aria-hidden="true">📎</span>
+                        <input type="file" accept="image/*,video/*,audio/*" onChange={selectAttachment} className="hidden" />
+                      </label>
+                      <GradBtn onClick={sendMessage} disabled={(!newMessage.trim() && !attachmentFile) || sending} className="w-11 h-11 flex items-center justify-center shadow-md flex-shrink-0">
                         {sending ? '...' : '➤'}
                       </GradBtn>
                     </div>

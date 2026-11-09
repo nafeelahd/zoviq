@@ -16,6 +16,7 @@ export default function ProfilePage() {
   const [userId, setUserId] = useState('')
   const [profile, setProfile] = useState<Profile | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [savedPosts, setSavedPosts] = useState<Post[]>([])
   const [followers, setFollowers] = useState(0)
   const [following, setFollowing] = useState(0)
   const [bio, setBio] = useState('')
@@ -47,6 +48,15 @@ export default function ProfilePage() {
     const { count: fc } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', uid)
     const { count: fc2 } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', uid)
     setFollowers(fc || 0); setFollowing(fc2 || 0)
+
+    const savedIds = JSON.parse(window.localStorage.getItem('zoviq-saved-posts') || '[]') as string[]
+    if (savedIds.length > 0) {
+      const { data: savedData } = await supabase.from('posts').select('*, likes(user_id), comments(id)').in('id', savedIds).order('created_at', { ascending: false })
+      setSavedPosts(savedData || [])
+    } else {
+      setSavedPosts([])
+    }
+
     setLoading(false)
   }
 
@@ -188,6 +198,28 @@ export default function ProfilePage() {
             ))}
           </div>
         </div>
+
+        {savedPosts.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3 px-1" style={{ color: 'var(--muted)' }}>Saved Posts</p>
+            <div className="space-y-3">
+              {savedPosts.map(post => (
+                <div key={post.id} className="rounded-2xl border p-4 shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+                  {post.image_url && <img src={post.image_url} alt="saved post" className="w-full max-h-48 object-cover rounded-xl mb-3" />}
+                  {post.content && <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text)' }}>{post.content}</p>}
+                  <div className="flex items-center justify-between text-xs" style={{ color: 'var(--muted)' }}>
+                    <div className="flex items-center gap-3">
+                      <span>❤️ {post.likes?.length || 0}</span>
+                      <span>💬 {post.comments?.length || 0}</span>
+                      <span>{timeAgo(post.created_at)}</span>
+                    </div>
+                    <span className="px-2 py-1 rounded-lg" style={{ background: '#EEF2FF', color: '#6366F1' }}>Saved</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Posts */}
         <div>

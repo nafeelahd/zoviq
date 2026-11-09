@@ -13,8 +13,8 @@ export type AppNotification = {
 export async function insertNotifications(
   supabase: SupabaseClient,
   notifications: AppNotification[]
-) {
-  if (!notifications.length) return
+): Promise<boolean> {
+  if (!notifications.length) return true
 
   const { data, error } = await supabase
     .from('notifications')
@@ -23,9 +23,9 @@ export async function insertNotifications(
 
   if (error) {
     console.error('Could not create notifications:', error)
-    return
+    return false
   }
-  if (!data?.length) return
+  if (!data?.length) return true
 
   const notificationIds = data.map(notification => notification.id)
   for (let index = 0; index < notificationIds.length; index += 50) {
@@ -43,6 +43,7 @@ export async function insertNotifications(
       console.error('Could not send push notifications:', pushError)
     }
   }
+  return true
 }
 
 export function insertNotification(supabase: SupabaseClient, notification: AppNotification) {

@@ -342,13 +342,14 @@ export default function MessagesPage() {
       if (!res.ok || !data.url || !data.token) throw new Error(data.error || 'Could not create the call room')
 
       const supabase = createClient()
-      await insertNotification(supabase, {
+      const notificationCreated = await insertNotification(supabase, {
         user_id: selectedUser.id,
         actor_id: userId,
         type: type === 'video' ? 'video_call' : 'audio_call',
         call_room: roomName,
         read: false,
       })
+      if (!notificationCreated) throw new Error('Could not notify the other person. Check your Supabase notifications table setup.')
 
       setRoomUrl(data.url)
       setMeetingToken(data.token)

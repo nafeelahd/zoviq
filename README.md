@@ -124,7 +124,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 Generate the VAPID pair with `npx web-push generate-vapid-keys`. Keep `DAILY_API_KEY`, `VAPID_PRIVATE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` server-only; never use the `NEXT_PUBLIC_` prefix for them. The service-role key is available in your Supabase project's API settings. Never commit `.env.local`; it is already listed in `.gitignore`. If your deployment still uses the old `NEXT_PUBLIC_DAILY_API_KEY` variable, the server accepts it temporarily; replace it with `DAILY_API_KEY` to keep the key private.
 
-Push notifications require HTTPS (localhost is allowed for development), VAPID keys, and the Supabase service-role key. After setting the variables, restart or redeploy the app, sign in, and select **Settings → Turn on push notifications**. Run the updated `supabase-setup.sql` to create the server-managed push-subscription table.
+Push notifications require HTTPS (localhost is allowed for development), VAPID keys, and the Supabase service-role key. After setting the variables, restart or redeploy the app, sign in, and select **Settings → Turn on push notifications**. Run the updated `supabase-setup.sql` to create the server-managed push-subscription table and, for existing databases, add the `call_room` column used by call notifications.
 
 ### 5. Run it
 

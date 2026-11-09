@@ -235,7 +235,8 @@ export default function GroupsPage() {
           read: false,
         }))
       if (notifications.length) {
-        await insertNotifications(supabase, notifications)
+        const notificationsCreated = await insertNotifications(supabase, notifications)
+        if (!notificationsCreated) throw new Error('Could not notify group members. Check your Supabase notifications table setup.')
       }
 
       setRoomUrl(data.url)

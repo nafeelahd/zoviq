@@ -13,6 +13,15 @@ create table if not exists public.profiles (
 alter table public.profiles
   add column if not exists last_seen timestamp with time zone;
 
+do $$
+begin
+  if to_regclass('public.notifications') is not null then
+    alter table public.notifications
+      add column if not exists call_room text;
+  end if;
+end;
+$$;
+
 -- Run this setup again after creating the messages table to add media attachments.
 do $$
 begin

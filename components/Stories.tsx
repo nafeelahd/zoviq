@@ -108,6 +108,12 @@ export default function Stories({ userId, email }: { userId: string; email: stri
 
   const openStoryCamera = () => setShowCamera(true)
 
+  const openStoryGallery = () => {
+    if (!fileRef.current) return
+    fileRef.current.value = ''
+    fileRef.current.click()
+  }
+
   const uploadStory = async (file?: File) => {
     if (!file) return
     setUploading(true)
@@ -290,6 +296,18 @@ export default function Stories({ userId, email }: { userId: string; email: stri
             <span className="text-xs" style={{ color: '#9CA3AF' }}>
               {myStories ? `Your story (${myStories.stories.length})` : 'Your story'}
             </span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={openStoryCamera} disabled={uploading}
+                className="rounded-lg px-2 py-1 text-[11px] font-medium disabled:opacity-50"
+                style={{ background: '#EEF2FF', color: '#6366F1' }}>
+                Camera
+              </button>
+              <button type="button" onClick={openStoryGallery} disabled={uploading}
+                className="rounded-lg px-2 py-1 text-[11px] font-medium disabled:opacity-50"
+                style={{ background: '#F3F4F6', color: '#4B5563' }}>
+                Gallery
+              </button>
+            </div>
             <input ref={fileRef} type="file" accept="image/*,video/*" onChange={e => { void uploadStory(e.target.files?.[0]); e.target.value = '' }} className="hidden" />
           </div>
 

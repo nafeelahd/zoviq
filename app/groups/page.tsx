@@ -22,6 +22,7 @@ export default function GroupsPage() {
   const [newMessage, setNewMessage] = useState('')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [attachmentKind, setAttachmentKind] = useState<'image' | 'video' | 'audio' | null>(null)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
@@ -72,6 +73,17 @@ export default function GroupsPage() {
   }, [])
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  useEffect(() => {
+    if (!attachmentFile || attachmentKind !== 'audio') {
+      setAudioPreviewUrl(null)
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(attachmentFile)
+    setAudioPreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [attachmentFile, attachmentKind])
 
   useEffect(() => {
     return () => {
@@ -334,12 +346,13 @@ export default function GroupsPage() {
           'audio/wav': 'wav',
           'audio/x-wav': 'wav',
         }
-        const extension = isVideo ? videoExtensions[attachmentFile.type] : isAudio ? audioExtensions[attachmentFile.type] : imageExtensions[attachmentFile.type]
+        const contentType = attachmentFile.type.split(';', 1)[0].trim().toLowerCase()
+        const extension = isVideo ? videoExtensions[contentType] : isAudio ? audioExtensions[contentType] : imageExtensions[contentType]
         if (!extension) throw new Error('Unsupported attachment type')
         const path = `group-messages/${userId}/${selectedGroup.id}/${Date.now()}.${extension}`
         const { error: uploadError } = await supabase.storage.from('posts').upload(path, attachmentFile, {
           cacheControl: '3600',
-          contentType: attachmentFile.type,
+          contentType,
           upsert: false,
         })
         if (uploadError) throw new Error(`Could not upload attachment: ${uploadError.message}`)
@@ -354,12 +367,12 @@ export default function GroupsPage() {
         content: newMessage.trim() || (audioUrl ? '🎙️ Voice message' : ''),
         audio_url: audioUrl,
       })
-      if (error) { setSendError('Failed: ' + error.message); return }
+      if (error) throw new Error(`Failed to send group message: ${error.message}`)
       const otherMembers = members.filter(m => m.user_id !== userId)
       for (const member of otherMembers) {
         await insertNotification(supabase, { user_id: member.user_id, actor_id: userId, type: 'group_message', group_id: selectedGroup.id })
       }
-      setNewMessage(''); setAttachmentFile(null); setAttachmentKind(null); setVoiceSeconds(0); setSending(false); fetchMessages(selectedGroup.id)
+      setNewMessage(''); setAttachmentFile(null); setAttachmentKind(null); setVoiceSeconds(0); fetchMessages(selectedGroup.id)
     } catch (error) {
       if (uploadedAttachmentPath) {
         const { error: cleanupError } = await supabase.storage.from('posts').remove([uploadedAttachmentPath])
@@ -367,6 +380,7 @@ export default function GroupsPage() {
       }
       console.error('Could not send group message:', error)
       setSendError(error instanceof Error ? error.message : 'Could not send message')
+    } finally {
       setSending(false)
     }
   }
@@ -654,9 +668,14 @@ export default function GroupsPage() {
                   <div className="px-5 py-4 border-t max-md:px-3 max-md:py-3" style={{ borderColor: 'var(--border)' }}>
                     {sendError && <p className="text-red-500 text-xs mb-2">{sendError}</p>}
                     {attachmentFile && (
-                      <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
-                        <span className="truncate">{attachmentKind === 'audio' ? 'Voice note' : attachmentKind === 'video' ? 'Video' : 'Image'}: {attachmentFile.name}</span>
-                        <button type="button" onClick={() => { setAttachmentFile(null); setAttachmentKind(null) }} className="text-red-500">Remove</button>
+                      <div className="mb-3 rounded-xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--input-bg)' }}>
+                        <div className="mb-2 flex items-center justify-between gap-2 text-xs" style={{ color: 'var(--muted)' }}>
+                          <span className="truncate">{attachmentKind === 'audio' ? 'Voice message preview' : attachmentKind === 'video' ? 'Video' : 'Image'}: {attachmentFile.name}</span>
+                          <button type="button" onClick={() => { setAttachmentFile(null); setAttachmentKind(null) }} className="flex-shrink-0 text-red-500">Remove</button>
+                        </div>
+                        {attachmentKind === 'audio' && audioPreviewUrl && (
+                          <audio src={audioPreviewUrl} controls preload="metadata" className="w-full" aria-label="Voice message preview" />
+                        )}
                       </div>
                     )}
                     <div className="flex gap-3 items-center">

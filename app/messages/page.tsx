@@ -19,6 +19,7 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState('')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [attachmentKind, setAttachmentKind] = useState<'image' | 'video' | 'audio' | null>(null)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
   const [messageError, setMessageError] = useState('')
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [voiceSeconds, setVoiceSeconds] = useState(0)
@@ -77,6 +78,17 @@ export default function MessagesPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    if (!attachmentFile || attachmentKind !== 'audio') {
+      setAudioPreviewUrl(null)
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(attachmentFile)
+    setAudioPreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [attachmentFile, attachmentKind])
 
   useEffect(() => {
     return () => {
@@ -318,12 +330,13 @@ export default function MessagesPage() {
         }
         const isVideo = attachmentFile.type.startsWith('video/')
         const isAudio = attachmentFile.type.startsWith('audio/') || attachmentKind === 'audio'
-        const extension = isVideo ? videoExtensions[attachmentFile.type] : isAudio ? audioExtensions[attachmentFile.type] : imageExtensions[attachmentFile.type]
+        const contentType = attachmentFile.type.split(';', 1)[0].trim().toLowerCase()
+        const extension = isVideo ? videoExtensions[contentType] : isAudio ? audioExtensions[contentType] : imageExtensions[contentType]
         if (!extension) throw new Error('Unsupported attachment type')
         const path = `messages/${userId}/${selectedUser.id}/${Date.now()}.${extension}`
         const { error: uploadError } = await supabase.storage.from('posts').upload(path, attachmentFile, {
           cacheControl: '3600',
-          contentType: attachmentFile.type,
+          contentType,
           upsert: false,
         })
         if (uploadError) throw new Error(`Could not upload attachment: ${uploadError.message}`)
@@ -642,9 +655,14 @@ export default function MessagesPage() {
                   <div className="px-5 py-4 border-t max-md:px-3 max-md:py-3" style={{ borderColor: 'var(--border)' }}>
                     {messageError && <p role="alert" className="mb-2 text-xs text-red-600">{messageError}</p>}
                     {attachmentFile && (
-                      <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
-                        <span className="truncate">{attachmentKind === 'audio' ? 'Voice note' : attachmentKind === 'video' ? 'Video' : 'Image'}: {attachmentFile.name}</span>
-                        <button type="button" onClick={() => { setAttachmentFile(null); setAttachmentKind(null) }} aria-label="Remove attachment" className="text-red-500">Remove</button>
+                      <div className="mb-3 rounded-xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--input-bg)' }}>
+                        <div className="mb-2 flex items-center justify-between gap-2 text-xs" style={{ color: 'var(--muted)' }}>
+                          <span className="truncate">{attachmentKind === 'audio' ? 'Voice message preview' : attachmentKind === 'video' ? 'Video' : 'Image'}: {attachmentFile.name}</span>
+                          <button type="button" onClick={() => { setAttachmentFile(null); setAttachmentKind(null) }} aria-label="Remove attachment" className="flex-shrink-0 text-red-500">Remove</button>
+                        </div>
+                        {attachmentKind === 'audio' && audioPreviewUrl && (
+                          <audio src={audioPreviewUrl} controls preload="metadata" className="w-full" aria-label="Voice message preview" />
+                        )}
                       </div>
                     )}
                     <div className="flex gap-3 items-center">

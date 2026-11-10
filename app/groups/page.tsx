@@ -5,9 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import CallModal from '@/components/CallModal'
 import { insertNotification, insertNotifications } from '@/lib/notifications'
+import { removeMessageAttachments } from '@/lib/messageAttachments'
 
 type Group = { id: string; name: string; description: string | null; image_url: string | null; created_by: string; created_at: string; privacy: 'public' | 'private'; member_count: number; is_member: boolean; request_status: 'none' | 'pending' | 'accepted' }
-type GroupMessage = { id: string; content: string; created_at: string; user_id: string; username: string; audio_url: string | null }
+type GroupMessage = { id: string; content: string; created_at: string; user_id: string; username: string; image_url: string | null; video_url: string | null; audio_url: string | null }
 type Member = { id: string; user_id: string; role: string; username: string; avatar_url: string | null }
 type JoinRequest = { id: string; user_id: string; username: string; created_at: string }
 
@@ -339,6 +340,8 @@ export default function GroupsPage() {
     const supabase = createClient()
     let uploadedAttachmentPath: string | null = null
     try {
+      let imageUrl: string | null = null
+      let videoUrl: string | null = null
       let audioUrl: string | null = null
       if (attachmentFile) {
         const isVideo = attachmentFile.type.startsWith('video/')
@@ -380,12 +383,16 @@ export default function GroupsPage() {
         uploadedAttachmentPath = path
         const publicUrl = supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
         if (isAudio) audioUrl = publicUrl
+        else if (isVideo) videoUrl = publicUrl
+        else imageUrl = publicUrl
       }
 
       const { error } = await supabase.from('group_messages').insert({
         group_id: selectedGroup.id,
         user_id: userId,
-        content: newMessage.trim() || (audioUrl ? '🎙️ Voice message' : ''),
+        content: newMessage.trim() || (audioUrl ? '🎙️ Voice message' : videoUrl ? '📹 Video' : imageUrl ? '📷 Image' : ''),
+        image_url: imageUrl,
+        video_url: videoUrl,
         audio_url: audioUrl,
       })
       if (error) throw new Error(`Failed to send group message: ${error.message}`)
@@ -427,6 +434,14 @@ export default function GroupsPage() {
           .eq('id', message.id).eq('user_id', userId).select('id').maybeSingle()
         if (error) throw new Error(`Could not delete message for everyone: ${error.message}`)
         if (!data) throw new Error('You can delete for everyone only the messages you sent.')
+        setMessages(current => current.filter(item => item.id !== message.id))
+        try {
+          await removeMessageAttachments(supabase, [message.image_url, message.video_url, message.audio_url])
+        } catch (cleanupError) {
+          console.error('Group message deleted but attached media cleanup failed:', cleanupError)
+          setSendError(`Message deleted for everyone, but attached media could not be removed: ${cleanupError instanceof Error ? cleanupError.message : 'storage cleanup failed'}`)
+        }
+        return
       }
       setMessages(current => current.filter(item => item.id !== message.id))
     } catch (error) {
@@ -704,8 +719,10 @@ export default function GroupsPage() {
                           {!isMe && <p className="text-xs mb-1 ml-1" style={{ color: 'var(--muted)' }}>{msg.username}</p>}
                           <div className={`overflow-hidden rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
                             style={isMe ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' } : { background: '#F3F4F6', color: 'var(--text)' }}>
+                            {msg.image_url && <a href={msg.image_url} target="_blank" rel="noreferrer"><img src={msg.image_url} alt="Image attachment" className="max-h-64 max-w-full object-contain" /></a>}
+                            {msg.video_url && <video src={msg.video_url} controls playsInline preload="metadata" className="max-h-64 max-w-full bg-black" aria-label="Video attachment" />}
                             {msg.audio_url && <audio src={msg.audio_url} controls className="max-w-full" style={{ maxWidth: 240 }} />}
-                            {msg.content && msg.content !== '🎙️ Voice message' && <p className="px-4 py-2.5">{msg.content}</p>}
+                            {msg.content && !['🎙️ Voice message', '📷 Image', '📹 Video'].includes(msg.content) && <p className="px-4 py-2.5">{msg.content}</p>}
                             <p className="px-4 pb-2.5 text-xs" style={{ color: isMe ? 'rgba(255,255,255,0.6)' : '#9CA3AF' }}>{timeAgo(msg.created_at)}</p>
                           </div>
                           <div className={`mt-1 flex ${isMe ? 'justify-end' : 'justify-start'}`}>

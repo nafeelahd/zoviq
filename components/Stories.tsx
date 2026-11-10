@@ -330,7 +330,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
       )}
 
       {/* Stories row */}
-      <div className="rounded-2xl border p-4 mb-5 shadow-sm" style={{ background: 'white', borderColor: '#F0EFF8' }}>
+      <div className="rounded-2xl border p-4 mb-5 shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
         {uploadError && <p className="text-red-500 text-xs mb-2">{uploadError}</p>}
         <div className="flex gap-4 overflow-x-auto pb-1">
 
@@ -339,9 +339,9 @@ export default function Stories({ userId, email }: { userId: string; email: stri
             {myStories ? (
               <button onClick={() => openStoryViewer(myStories)}
                 className="relative w-14 h-14 rounded-full p-0.5"
-                style={{ background: myStories.allViewed ? '#E5E7EB' : 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
-                <div className="w-full h-full rounded-full overflow-hidden border-2 border-white flex items-center justify-center"
-                  style={{ background: '#F3F4F6' }}>
+                style={{ background: myStories.allViewed ? 'var(--border)' : 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
+                <div className="w-full h-full rounded-full overflow-hidden border-2 flex items-center justify-center"
+                  style={{ background: 'var(--surface-solid)', borderColor: 'var(--card)' }}>
                   {myStories.avatar_url
                     ? <img src={myStories.avatar_url} alt="me" className="w-full h-full object-cover" />
                     : <span className="font-bold text-lg" style={{ color: '#6366F1' }}>{email[0]?.toUpperCase()}</span>
@@ -356,7 +356,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
             ) : (
               <button onClick={() => openStoryCamera()} disabled={uploading}
                 className="relative w-14 h-14 rounded-full border-2 border-dashed flex items-center justify-center transition overflow-hidden"
-                style={{ borderColor: '#C7D2FE', background: '#EEF2FF' }}>
+                style={{ borderColor: '#818CF8', background: 'var(--hover-bg)' }}>
                 {uploading
                   ? <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
                   : <span className="text-2xl font-light" style={{ color: '#6366F1' }}>+</span>
@@ -386,9 +386,9 @@ export default function Stories({ userId, email }: { userId: string; email: stri
             <div key={userStories.user_id} className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={() => openStoryViewer(userStories)}
                 className="w-14 h-14 rounded-full p-0.5"
-                style={{ background: userStories.allViewed ? '#E5E7EB' : 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
-                <div className="w-full h-full rounded-full overflow-hidden border-2 border-white flex items-center justify-center"
-                  style={{ background: '#F3F4F6' }}>
+                style={{ background: userStories.allViewed ? 'var(--border)' : 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
+                <div className="w-full h-full rounded-full overflow-hidden border-2 flex items-center justify-center"
+                  style={{ background: 'var(--surface-solid)', borderColor: 'var(--card)' }}>
                   {userStories.avatar_url
                     ? <img src={userStories.avatar_url} alt={userStories.username} className="w-full h-full object-cover" />
                     : <span className="font-bold text-lg" style={{ color: '#6366F1' }}>{userStories.username[0].toUpperCase()}</span>

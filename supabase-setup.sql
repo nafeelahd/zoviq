@@ -32,6 +32,8 @@ begin
   end if;
 
   if to_regclass('public.group_messages') is not null then
+    alter table public.group_messages add column if not exists image_url text;
+    alter table public.group_messages add column if not exists video_url text;
     alter table public.group_messages add column if not exists audio_url text;
   end if;
 end;
@@ -74,6 +76,17 @@ begin
   end if;
 end;
 $$;
+
+drop policy if exists "Users can delete their own message attachments" on storage.objects;
+create policy "Users can delete their own message attachments"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'posts'
+    and (
+      name like ('messages/' || auth.uid()::text || '/%')
+      or name like ('group-messages/' || auth.uid()::text || '/%')
+    )
+  );
 
 create table if not exists public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),

@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar'
 import CallModal from '@/components/CallModal'
 import IncomingCall from '@/components/IncomingCall'
 import { insertNotification } from '@/lib/notifications'
+import { removeMessageAttachments } from '@/lib/messageAttachments'
 
 type Profile = { id: string; username: string; avatar_url: string | null; last_seen: string | null }
 type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; video_url: string | null; audio_url: string | null; read: boolean; created_at: string }
@@ -231,6 +232,14 @@ export default function MessagesPage() {
           .eq('id', message.id).eq('sender_id', userId).select('id').maybeSingle()
         if (error) throw new Error(`Could not delete message for everyone: ${error.message}`)
         if (!data) throw new Error('You can delete for everyone only the messages you sent.')
+        setMessages(current => current.filter(item => item.id !== message.id))
+        try {
+          await removeMessageAttachments(supabase, [message.image_url, message.video_url, message.audio_url])
+        } catch (cleanupError) {
+          console.error('Message deleted but attached media cleanup failed:', cleanupError)
+          setMessageError(`Message deleted for everyone, but attached media could not be removed: ${cleanupError instanceof Error ? cleanupError.message : 'storage cleanup failed'}`)
+        }
+        return
       }
       setMessages(current => current.filter(item => item.id !== message.id))
     } catch (error) {

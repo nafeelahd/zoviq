@@ -158,9 +158,9 @@ Tables used by the app:
 | `groups` | `name`, `description`, `image_url`, `created_by`, `privacy` |
 | `group_members` | `group_id`, `user_id`, `role` |
 | `group_requests` | `group_id`, `user_id`, `status` |
-| `group_messages` | `group_id`, `user_id`, `content`, `audio_url` |
+| `group_messages` | `group_id`, `user_id`, `content`, `image_url`, `video_url`, `audio_url` |
 
-Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` and `group_messages` tables, run the setup SQL again to add media columns, per-user message visibility, and sender-only delete-for-everyone policies.
+Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` and `group_messages` tables, run the setup SQL again to add media columns, per-user message visibility, sender-only delete-for-everyone policies, and storage cleanup permissions for message attachments.
 
 ---
 

@@ -37,6 +37,44 @@ begin
 end;
 $$;
 
+create table if not exists public.message_hidden_for (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  message_type text not null check (message_type in ('direct', 'group')),
+  conversation_id text not null,
+  message_id text not null,
+  created_at timestamp with time zone not null default now(),
+  primary key (user_id, message_type, conversation_id, message_id)
+);
+
+alter table public.message_hidden_for enable row level security;
+grant select, insert, delete on public.message_hidden_for to authenticated;
+
+drop policy if exists "Users can view their hidden messages" on public.message_hidden_for;
+create policy "Users can view their hidden messages"
+  on public.message_hidden_for for select using (auth.uid() = user_id);
+
+drop policy if exists "Users can hide messages for themselves" on public.message_hidden_for;
+create policy "Users can hide messages for themselves"
+  on public.message_hidden_for for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Users can unhide messages for themselves" on public.message_hidden_for;
+create policy "Users can unhide messages for themselves"
+  on public.message_hidden_for for delete using (auth.uid() = user_id);
+
+do $$
+begin
+  if to_regclass('public.messages') is not null then
+    execute 'drop policy if exists "Users can delete their own messages" on public.messages';
+    execute 'create policy "Users can delete their own messages" on public.messages for delete using (auth.uid() = sender_id)';
+  end if;
+
+  if to_regclass('public.group_messages') is not null then
+    execute 'drop policy if exists "Users can delete their own group messages" on public.group_messages';
+    execute 'create policy "Users can delete their own group messages" on public.group_messages for delete using (auth.uid() = user_id)';
+  end if;
+end;
+$$;
+
 create table if not exists public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,

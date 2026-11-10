@@ -126,7 +126,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 Generate the VAPID pair with `npx web-push generate-vapid-keys`. Keep `DAILY_API_KEY`, `VAPID_PRIVATE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` server-only; never use the `NEXT_PUBLIC_` prefix for them. The service-role key is available in your Supabase project's API settings and is used by the server to store call invitations and push subscriptions. Never commit `.env.local`; it is already listed in `.gitignore`. If your deployment still uses the old `NEXT_PUBLIC_DAILY_API_KEY` variable, the server accepts it temporarily; replace it with `DAILY_API_KEY` to keep the key private.
 
-Push notifications require HTTPS (localhost is allowed for development), VAPID keys, and the Supabase service-role key. After setting the variables, restart or redeploy the app, sign in, and select **Settings → Turn on push notifications**. Run the updated `supabase-setup.sql` to create the server-managed push-subscription table and, for existing databases, add the `call_room` column used by call notifications.
+Push notifications require HTTPS (localhost is allowed for development), VAPID keys, and the Supabase service-role key. After setting the variables, restart or redeploy the app, sign in, and select **Settings → Turn on push notifications**. Run the updated `supabase-setup.sql` to create the server-managed push-subscription and message visibility tables, add required audio columns, and enable message deletion policies.
 
 ### 5. Run it
 
@@ -150,6 +150,7 @@ Tables used by the app:
 | `comments` | `user_id`, `post_id`, `content` |
 | `follows` | `follower_id`, `following_id` (unique pair) |
 | `messages` | `sender_id`, `receiver_id`, `content`, `image_url`, `video_url`, `audio_url`, `read` |
+| `message_hidden_for` | `user_id`, `message_type`, `conversation_id`, `message_id` (created by `supabase-setup.sql`) |
 | `notifications` | `user_id`, `actor_id`, `type`, `post_id`, `group_id`, `call_room`, `read` |
 | `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth` (created by `supabase-setup.sql`) |
 | `stories` | `user_id`, `image_url`, `video_url`, `expires_at` |
@@ -159,7 +160,7 @@ Tables used by the app:
 | `group_requests` | `group_id`, `user_id`, `status` |
 | `group_messages` | `group_id`, `user_id`, `content`, `audio_url` |
 
-Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` table, run the setup SQL again to add `last_seen`, `image_url`, and `video_url` columns to existing tables.
+Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` and `group_messages` tables, run the setup SQL again to add media columns, per-user message visibility, and sender-only delete-for-everyone policies.
 
 ---
 

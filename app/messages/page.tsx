@@ -11,11 +11,14 @@ import { insertNotification } from '@/lib/notifications'
 type Profile = { id: string; username: string; avatar_url: string | null; last_seen: string | null }
 type Message = { id: string; sender_id: string; receiver_id: string; content: string; image_url: string | null; video_url: string | null; audio_url: string | null; read: boolean; created_at: string }
 
+const directConversationId = (userA: string, userB: string) => [userA, userB].sort().join(':')
+
 export default function MessagesPage() {
   const [userId, setUserId] = useState('')
   const [people, setPeople] = useState<Profile[]>([])
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState('')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [attachmentKind, setAttachmentKind] = useState<'image' | 'video' | 'audio' | null>(null)
@@ -172,21 +175,70 @@ export default function MessagesPage() {
 
   const fetchMessages = async (uid: string, otherId: string) => {
     const supabase = createClient()
-    const { data } = await supabase
+    const conversationId = directConversationId(uid, otherId)
+    const [{ data, error }, { data: hiddenRows, error: hiddenError }] = await Promise.all([
+      supabase
       .from('messages')
       .select('*')
       .or(`and(sender_id.eq.${uid},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${uid})`)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: true }),
+      supabase.from('message_hidden_for').select('message_id')
+        .eq('user_id', uid).eq('message_type', 'direct').eq('conversation_id', conversationId),
+    ])
+    if (error) {
+      console.error('Could not load messages:', error)
+      setMessageError('Could not load messages. Please try again.')
+      return
+    }
+    if (hiddenError) {
+      console.error('Could not load hidden messages:', hiddenError)
+      setMessageError('Could not load message visibility settings. Run the updated Supabase setup SQL.')
+      return
+    }
     if (data) {
+      const hiddenIds = new Set(hiddenRows?.map(row => row.message_id) || [])
+      const visibleMessages = data.filter(message => !hiddenIds.has(message.id))
       setMessages(prev => {
         // Only update if messages changed
-        if (JSON.stringify(prev.map(m => m.id)) === JSON.stringify(data.map((m: Message) => m.id))) return prev
-        return data
+        if (JSON.stringify(prev.map(m => m.id)) === JSON.stringify(visibleMessages.map(m => m.id))) return prev
+        return visibleMessages
       })
     }
+    setMessageError('')
     // Mark as read
     await supabase.from('messages').update({ read: true })
       .eq('sender_id', otherId).eq('receiver_id', uid).eq('read', false)
+  }
+
+  const deleteMessage = async (message: Message, mode: 'me' | 'everyone') => {
+    if (!selectedUser || deletingMessageId) return
+    if (mode === 'everyone' && !window.confirm('Delete this message for everyone? This cannot be undone.')) return
+
+    setDeletingMessageId(message.id)
+    setMessageError('')
+    const supabase = createClient()
+    try {
+      if (mode === 'me') {
+        const { error } = await supabase.from('message_hidden_for').insert({
+          user_id: userId,
+          message_type: 'direct',
+          conversation_id: directConversationId(userId, selectedUser.id),
+          message_id: message.id,
+        })
+        if (error) throw new Error(`Could not delete message for you: ${error.message}`)
+      } else {
+        const { data, error } = await supabase.from('messages').delete()
+          .eq('id', message.id).eq('sender_id', userId).select('id').maybeSingle()
+        if (error) throw new Error(`Could not delete message for everyone: ${error.message}`)
+        if (!data) throw new Error('You can delete for everyone only the messages you sent.')
+      }
+      setMessages(current => current.filter(item => item.id !== message.id))
+    } catch (error) {
+      console.error('Could not delete direct message:', error)
+      setMessageError(error instanceof Error ? error.message : 'Could not delete message')
+    } finally {
+      setDeletingMessageId(null)
+    }
   }
 
   const sendTyping = (isTyping: boolean) => {
@@ -639,6 +691,31 @@ export default function MessagesPage() {
                             <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                               <p className="text-xs" style={{ color: 'var(--muted)' }}>{timeAgo(msg.created_at)}</p>
                               {isMe && <span className="text-xs" style={{ color: msg.read ? '#3B82F6' : 'var(--muted)' }}>{msg.read ? '✓✓' : '✓'}</span>}
+                              <details className="relative">
+                                <summary className="list-none cursor-pointer rounded px-1 text-xs" style={{ color: 'var(--muted)' }} aria-label="Message options">⋯</summary>
+                                <div className="absolute right-0 z-20 mt-1 min-w-36 rounded-xl border p-1 shadow-lg"
+                                  style={{ background: 'var(--surface-solid)', borderColor: 'var(--border)' }}>
+                                  <button type="button" disabled={deletingMessageId === msg.id}
+                                    onClick={event => {
+                                      event.currentTarget.closest('details')?.removeAttribute('open')
+                                      void deleteMessage(msg, 'me')
+                                    }}
+                                    className="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-gray-100 disabled:opacity-50"
+                                    style={{ color: 'var(--text)' }}>
+                                    Delete for me
+                                  </button>
+                                  {isMe && (
+                                    <button type="button" disabled={deletingMessageId === msg.id}
+                                      onClick={event => {
+                                        event.currentTarget.closest('details')?.removeAttribute('open')
+                                        void deleteMessage(msg, 'everyone')
+                                      }}
+                                      className="block w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-50">
+                                      Delete for everyone
+                                    </button>
+                                  )}
+                                </div>
+                              </details>
                             </div>
                           </div>
                         </div>

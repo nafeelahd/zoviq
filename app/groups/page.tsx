@@ -17,6 +17,7 @@ export default function GroupsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [messages, setMessages] = useState<GroupMessage[]>([])
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
   const [newMessage, setNewMessage] = useState('')
@@ -105,6 +106,7 @@ export default function GroupsPage() {
     const supabase = createClient()
     const channel = supabase.channel(`group-${selectedGroup.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages', filter: `group_id=eq.${selectedGroup.id}` }, () => fetchMessages(selectedGroup.id))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'group_messages' }, () => fetchMessages(selectedGroup.id))
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [selectedGroup?.id, userId])
@@ -125,13 +127,31 @@ export default function GroupsPage() {
 
   const fetchMessages = async (groupId: string) => {
     const supabase = createClient()
-    const { data: msgs } = await supabase.from('group_messages').select('*').eq('group_id', groupId).order('created_at', { ascending: true })
+    const [{ data: msgs, error }, { data: hiddenRows, error: hiddenError }] = await Promise.all([
+      supabase.from('group_messages').select('*').eq('group_id', groupId).order('created_at', { ascending: true }),
+      supabase.from('message_hidden_for').select('message_id')
+        .eq('user_id', userId).eq('message_type', 'group').eq('conversation_id', groupId),
+    ])
+    if (error) {
+      console.error('Could not load group messages:', error)
+      setSendError('Could not load group messages. Please try again.')
+      return
+    }
+    if (hiddenError) {
+      console.error('Could not load hidden group messages:', hiddenError)
+      setSendError('Could not load message visibility settings. Run the updated Supabase setup SQL.')
+      return
+    }
     if (!msgs || msgs.length === 0) { setMessages([]); return }
-    const userIds = Array.from(new Set(msgs.map(m => m.user_id))) as string[]
+    const hiddenIds = new Set(hiddenRows?.map(row => row.message_id) || [])
+    const visibleMessages = msgs.filter(message => !hiddenIds.has(message.id))
+    if (visibleMessages.length === 0) { setMessages([]); setSendError(''); return }
+    const userIds = Array.from(new Set(visibleMessages.map(m => m.user_id))) as string[]
     const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', userIds)
     const profileMap: Record<string, string> = {}
     profiles?.forEach(p => { profileMap[p.id] = p.username })
-    setMessages(msgs.map(m => ({ ...m, username: profileMap[m.user_id] || 'user' })))
+    setMessages(visibleMessages.map(m => ({ ...m, username: profileMap[m.user_id] || 'user' })))
+    setSendError('')
   }
 
   const fetchMembers = async (groupId: string) => {
@@ -330,6 +350,7 @@ export default function GroupsPage() {
           'image/webp': 'webp',
           'image/avif': 'avif',
         }
+
         const videoExtensions: Record<string, string> = {
           'video/mp4': 'mp4',
           'video/webm': 'webm',
@@ -382,6 +403,37 @@ export default function GroupsPage() {
       setSendError(error instanceof Error ? error.message : 'Could not send message')
     } finally {
       setSending(false)
+    }
+  }
+
+  const deleteMessage = async (message: GroupMessage, mode: 'me' | 'everyone') => {
+    if (!selectedGroup || deletingMessageId) return
+    if (mode === 'everyone' && !window.confirm('Delete this message for everyone? This cannot be undone.')) return
+
+    setDeletingMessageId(message.id)
+    setSendError('')
+    const supabase = createClient()
+    try {
+      if (mode === 'me') {
+        const { error } = await supabase.from('message_hidden_for').insert({
+          user_id: userId,
+          message_type: 'group',
+          conversation_id: selectedGroup.id,
+          message_id: message.id,
+        })
+        if (error) throw new Error(`Could not delete message for you: ${error.message}`)
+      } else {
+        const { data, error } = await supabase.from('group_messages').delete()
+          .eq('id', message.id).eq('user_id', userId).select('id').maybeSingle()
+        if (error) throw new Error(`Could not delete message for everyone: ${error.message}`)
+        if (!data) throw new Error('You can delete for everyone only the messages you sent.')
+      }
+      setMessages(current => current.filter(item => item.id !== message.id))
+    } catch (error) {
+      console.error('Could not delete group message:', error)
+      setSendError(error instanceof Error ? error.message : 'Could not delete message')
+    } finally {
+      setDeletingMessageId(null)
     }
   }
 
@@ -655,6 +707,33 @@ export default function GroupsPage() {
                             {msg.audio_url && <audio src={msg.audio_url} controls className="max-w-full" style={{ maxWidth: 240 }} />}
                             {msg.content && msg.content !== '🎙️ Voice message' && <p className="px-4 py-2.5">{msg.content}</p>}
                             <p className="px-4 pb-2.5 text-xs" style={{ color: isMe ? 'rgba(255,255,255,0.6)' : '#9CA3AF' }}>{timeAgo(msg.created_at)}</p>
+                          </div>
+                          <div className={`mt-1 flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <details className="relative">
+                              <summary className="list-none cursor-pointer rounded px-1 text-xs" style={{ color: 'var(--muted)' }} aria-label="Message options">⋯</summary>
+                              <div className="absolute right-0 z-20 mt-1 min-w-36 rounded-xl border p-1 shadow-lg"
+                                style={{ background: 'var(--surface-solid)', borderColor: 'var(--border)' }}>
+                                <button type="button" disabled={deletingMessageId === msg.id}
+                                  onClick={event => {
+                                    event.currentTarget.closest('details')?.removeAttribute('open')
+                                    void deleteMessage(msg, 'me')
+                                  }}
+                                  className="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-gray-100 disabled:opacity-50"
+                                  style={{ color: 'var(--text)' }}>
+                                  Delete for me
+                                </button>
+                                {isMe && (
+                                  <button type="button" disabled={deletingMessageId === msg.id}
+                                    onClick={event => {
+                                      event.currentTarget.closest('details')?.removeAttribute('open')
+                                      void deleteMessage(msg, 'everyone')
+                                    }}
+                                    className="block w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-50">
+                                    Delete for everyone
+                                  </button>
+                                )}
+                              </div>
+                            </details>
                           </div>
                         </div>
                       </div>

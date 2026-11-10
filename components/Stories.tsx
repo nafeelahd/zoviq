@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CameraCapture from '@/components/CameraCapture'
+import { muteVideo } from '@/lib/muteVideo'
 
 type Story = {
   id: string
@@ -29,10 +30,24 @@ export default function Stories({ userId, email }: { userId: string; email: stri
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [showCamera, setShowCamera] = useState(false)
+  const [pendingStoryVideo, setPendingStoryVideo] = useState<File | null>(null)
+  const [muteStoryVideo, setMuteStoryVideo] = useState(false)
+  const [storyPreviewUrl, setStoryPreviewUrl] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const progressRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => { fetchStories() }, [userId])
+
+  useEffect(() => {
+    if (!pendingStoryVideo) {
+      setStoryPreviewUrl('')
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(pendingStoryVideo)
+    setStoryPreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [pendingStoryVideo])
 
   useEffect(() => {
     if (viewingUser) {
@@ -114,18 +129,29 @@ export default function Stories({ userId, email }: { userId: string; email: stri
     fileRef.current.click()
   }
 
-  const uploadStory = async (file?: File) => {
+  const handleStoryFile = (file?: File) => {
     if (!file) return
+    if (file.type.startsWith('video/')) {
+      setPendingStoryVideo(file)
+      setMuteStoryVideo(false)
+      setUploadError('')
+      return
+    }
+    void uploadStory(file)
+  }
+
+  const uploadStory = async (sourceFile: File, mute = false) => {
     setUploading(true)
     setUploadError('')
 
     try {
+      const file = mute ? await muteVideo(sourceFile) : sourceFile
       const supabase = createClient()
       const ext = file.name.split('.').pop()
       const path = `stories/${userId}/${Date.now()}.${ext}`
 
       const { error: uploadErr } = await supabase.storage.from('posts').upload(path, file, { upsert: true, cacheControl: '3600' })
-      if (uploadErr) { setUploadError('Upload failed: ' + uploadErr.message); setUploading(false); if (fileRef.current) fileRef.current.value = ''; return }
+      if (uploadErr) throw new Error('Upload failed: ' + uploadErr.message)
 
       const { data: urlData } = supabase.storage.from('posts').getPublicUrl(path)
       const isVideo = file.type.startsWith('video/')
@@ -136,14 +162,26 @@ export default function Stories({ userId, email }: { userId: string; email: stri
         video_url: isVideo ? urlData.publicUrl : null,
       })
 
-      if (insertErr) setUploadError('Story failed: ' + insertErr.message)
-      else fetchStories()
-    } catch (err: any) {
-      setUploadError('Error: ' + err.message)
+      if (insertErr) throw new Error('Story failed: ' + insertErr.message)
+      await fetchStories()
+      return true
+    } catch (err) {
+      console.error('Could not upload story:', err)
+      setUploadError(err instanceof Error ? err.message : 'Could not upload story')
+      return false
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
     }
+  }
 
-    setUploading(false)
-    if (fileRef.current) fileRef.current.value = ''
+  const publishStoryVideo = async () => {
+    if (!pendingStoryVideo || uploading) return
+    const uploaded = await uploadStory(pendingStoryVideo, muteStoryVideo)
+    if (uploaded) {
+      setPendingStoryVideo(null)
+      setMuteStoryVideo(false)
+    }
   }
 
   const deleteStory = async (storyId: string) => {
@@ -204,9 +242,41 @@ export default function Stories({ userId, email }: { userId: string; email: stri
     <>
       {showCamera && (
         <CameraCapture
-          onCapture={file => { setShowCamera(false); void uploadStory(file) }}
+          onCapture={file => { setShowCamera(false); handleStoryFile(file) }}
           onClose={() => setShowCamera(false)}
         />
+      )}
+      {pendingStoryVideo && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-label="Preview story video">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-gray-950 shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 text-white">
+              <h2 className="font-semibold">Preview story video</h2>
+              <button type="button" onClick={() => { setPendingStoryVideo(null); setMuteStoryVideo(false) }} disabled={uploading}
+                className="rounded-lg px-3 py-1 text-2xl disabled:opacity-40" aria-label="Close preview">×</button>
+            </div>
+            {storyPreviewUrl && (
+              <video src={storyPreviewUrl} controls playsInline className="max-h-[65vh] w-full bg-black object-contain" aria-label="Story video preview" />
+            )}
+            <div className="space-y-4 p-4">
+              <label className="flex items-center gap-2 text-sm text-white">
+                <input type="checkbox" checked={muteStoryVideo} onChange={e => setMuteStoryVideo(e.target.checked)} disabled={uploading} />
+                Mute video audio
+              </label>
+              {muteStoryVideo && <p className="text-xs text-gray-300">The video will be processed without sound before upload.</p>}
+              {uploadError && <p role="alert" className="text-sm text-red-300">{uploadError}</p>}
+              <div className="flex gap-3">
+                <button type="button" onClick={() => { setPendingStoryVideo(null); setMuteStoryVideo(false) }} disabled={uploading}
+                  className="flex-1 rounded-xl border border-gray-600 py-2.5 text-sm font-medium text-white disabled:opacity-40">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => void publishStoryVideo()} disabled={uploading}
+                  className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+                  {uploading ? (muteStoryVideo ? 'Processing…' : 'Uploading…') : 'Share story'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       {/* Story viewer */}
       {viewingUser && currentStory && (
@@ -308,7 +378,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
                 Gallery
               </button>
             </div>
-            <input ref={fileRef} type="file" accept="image/*,video/*" onChange={e => { void uploadStory(e.target.files?.[0]); e.target.value = '' }} className="hidden" />
+            <input ref={fileRef} type="file" accept="image/*,video/*" onChange={e => { handleStoryFile(e.target.files?.[0]); e.target.value = '' }} className="hidden" />
           </div>
 
           {/* Other users' stories */}

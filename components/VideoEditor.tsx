@@ -16,6 +16,7 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
   const [endTime, setEndTime] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [muteAudio, setMuteAudio] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
@@ -98,11 +99,10 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
         '-ss', startTime.toFixed(3),
         '-t', (endTime - startTime).toFixed(3),
         '-map', '0:v:0',
-        '-map', '0:a?',
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-crf', '23',
-        '-c:a', 'aac',
+        ...(muteAudio ? ['-an'] : ['-map', '0:a?', '-c:a', 'aac']),
         '-movflags', '+faststart',
         outputName,
       ])
@@ -217,6 +217,11 @@ export default function VideoEditor({ file, onDone, onCancel }: VideoEditorProps
           <div className="bg-purple-50 rounded-xl px-4 py-3 text-sm text-purple-700">
             Trimmed clip: <strong>{fmt(endTime - startTime)}</strong> ({fmt(startTime)} → {fmt(endTime)})
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={muteAudio} onChange={e => setMuteAudio(e.target.checked)} />
+            Mute video audio
+          </label>
 
           {processing && (
             <div className="space-y-2" role="status" aria-live="polite">

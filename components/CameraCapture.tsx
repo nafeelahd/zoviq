@@ -27,13 +27,25 @@ export default function CameraCapture({ onCapture, onClose, allowVideo = true }:
       }
 
       try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({
+          const videoStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
           audio: false,
         })
-        if (active) setStream(cameraStream)
-        else cameraStream.getTracks().forEach(track => track.stop())
-      } catch (cameraError) {
+          cameraStream = videoStream
+          let audioTracks: MediaStreamTrack[] = []
+          try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            audioTracks = audioStream.getAudioTracks()
+          } catch (audioError) {
+            console.error('Could not access microphone for camera recording:', audioError)
+            if (active) setError('Microphone access is unavailable. Recorded videos will be silent.')
+          }
+
+          const recordingStream = new MediaStream([...videoStream.getVideoTracks(), ...audioTracks])
+          cameraStream = recordingStream
+          if (active) setStream(recordingStream)
+          else recordingStream.getTracks().forEach(track => track.stop())
+        } catch (cameraError) {
         console.error('Could not access camera:', cameraError)
         setError(cameraError instanceof Error && cameraError.name === 'NotAllowedError'
           ? 'Camera permission was denied. Allow camera access in your browser settings and try again.'
@@ -93,7 +105,14 @@ export default function CameraCapture({ onCapture, onClose, allowVideo = true }:
     }
 
     try {
-      const recorder = new MediaRecorder(stream)
+      const supportedTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+      ]
+      const mimeType = supportedTypes.find(type => MediaRecorder.isTypeSupported(type))
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
       chunksRef.current = []
       recorder.ondataavailable = event => {
         if (event.data.size > 0) chunksRef.current.push(event.data)

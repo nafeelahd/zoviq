@@ -13,7 +13,7 @@ Built with Next.js, Supabase and Daily.co.
 ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?logo=supabase&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)
 
-**[Live demo](https://zoviq-nafeel.vercel.app/auth/login)** 
+**[Live demo](https://zoviq-18.vercel.app/auth/login)** 
 
 </div>
 

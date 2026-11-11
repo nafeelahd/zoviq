@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import AuthShell from '@/components/auth/AuthShell'
 import AuthNotice from '@/components/auth/AuthNotice'
 
@@ -15,10 +14,24 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); setError('')
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) { setError(error.message); setLoading(false); return }
-    window.location.href = '/feed'
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      })
+      const result = await response.json() as { error?: string }
+      if (!response.ok) {
+        setError(result.error || 'Could not sign in. Please try again.')
+        setLoading(false)
+        return
+      }
+      window.location.replace('/feed')
+    } catch (error) {
+      console.error('Could not sign in:', error)
+      setError('Could not reach the sign-in service. Check your connection and try again.')
+      setLoading(false)
+    }
   }
 
   return (

@@ -122,7 +122,7 @@ export default function SearchPage() {
                 {post.image_url && <PostMedia src={post.image_url} alt="post" className="w-full max-h-48 object-cover" />}
                 {post.video_url && <PostMedia src={post.video_url} alt="post video" video className="w-full max-h-48 bg-black" />}
                 <div className="p-4">
-                  <Link href={`/profile/${encodeURIComponent(post.username || '')}`} className="text-xs font-semibold hover:underline" style={{ color: '#6366F1' }}>@{post.username}</Link>
+                  <Link href={`/profile/${encodeURIComponent(post.user_id)}`} className="text-xs font-semibold hover:underline" style={{ color: '#6366F1' }}>@{post.username}</Link>
                   <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{highlight(post.content)}</p>
                   <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>{timeAgo(post.created_at)}</p>
                 </div>
@@ -135,7 +135,7 @@ export default function SearchPage() {
         {!loading && tab === 'people' && people.length > 0 && (
           <div className="space-y-2">
             {people.map(person => (
-              <Link href={`/profile/${person.username}`} key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+              <Link href={`/profile/${encodeURIComponent(person.id)}`} key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                 <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 overflow-hidden"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                   {person.avatar_url ? <img src={person.avatar_url} alt={person.username} className="w-full h-full object-cover" /> : person.username[0].toUpperCase()}

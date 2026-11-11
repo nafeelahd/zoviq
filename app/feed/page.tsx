@@ -11,7 +11,7 @@ import CameraCapture from '@/components/CameraCapture'
 import PostMedia from '@/components/PostMedia'
 import { insertNotification } from '@/lib/notifications'
 
-type Comment = { id: string; content: string; created_at: string; user_id: string }
+type Comment = { id: string; content: string; created_at: string; user_id: string; username?: string; avatar_url?: string | null }
 type Post = {
   id: string; content: string; image_url: string | null; video_url: string | null
   created_at: string; user_id: string
@@ -76,12 +76,23 @@ export default function FeedPage() {
     if (!data) { setLoading(false); return }
 
     // Get profiles for all post authors
-    const userIds = Array.from(new Set(data.map(p => p.user_id))) as string[]
+    const userIds = Array.from(new Set([
+      ...data.map(post => post.user_id),
+      ...data.flatMap((post: { comments: { user_id: string }[] }) => post.comments.map((comment: { user_id: string }) => comment.user_id)),
+    ]))
     const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', userIds)
-    const profileMap: Record<string, any> = {}
-    profiles?.forEach(p => { profileMap[p.id] = p })
+    const profileMap = new Map(profiles?.map(profile => [profile.id, profile]) || [])
 
-    setPosts(data.map(p => ({ ...p, username: profileMap[p.user_id]?.username || 'user', avatar_url: profileMap[p.user_id]?.avatar_url || null })))
+    setPosts(data.map(post => ({
+      ...post,
+      username: profileMap.get(post.user_id)?.username || 'user',
+      avatar_url: profileMap.get(post.user_id)?.avatar_url || null,
+      comments: post.comments.map((comment: Comment) => ({
+        ...comment,
+        username: profileMap.get(comment.user_id)?.username || 'user',
+        avatar_url: profileMap.get(comment.user_id)?.avatar_url || null,
+      })),
+    })))
     setLoading(false)
   }
 
@@ -279,11 +290,11 @@ export default function FeedPage() {
                   {/* Header */}
                   <div className="flex items-center justify-between p-4 pb-3">
                     <div className="flex items-center gap-3">
-                      <Link href={`/profile/${encodeURIComponent(post.username || '')}`} aria-label={`View ${post.username || 'user'} profile`}>
+                      <Link href={`/profile/${encodeURIComponent(post.user_id)}`} aria-label={`View ${post.username || 'user'} profile`}>
                         <Avatar name={post.username || 'user'} url={post.avatar_url} size={10} />
                       </Link>
                       <div>
-                        <Link href={`/profile/${encodeURIComponent(post.username || '')}`} className="text-sm font-bold hover:underline" style={{ color: 'var(--text)' }}>{post.username || email.split('@')[0]}</Link>
+                        <Link href={`/profile/${encodeURIComponent(post.user_id)}`} className="text-sm font-bold hover:underline" style={{ color: 'var(--text)' }}>{post.username || email.split('@')[0]}</Link>
                         <p className="text-xs" style={{ color: 'var(--muted)' }}>{timeAgo(post.created_at)}</p>
                       </div>
                     </div>
@@ -336,11 +347,11 @@ export default function FeedPage() {
                         <div className="space-y-2 mb-3">
                           {post.comments.map(comment => (
                             <div key={comment.id} className="flex items-start gap-2">
-                              <Link href={`/profile/${encodeURIComponent(post.username || '')}`} aria-label={`View ${post.username || 'user'} profile`}>
-                                <Avatar name={post.username || 'user'} url={post.avatar_url} size={7} />
+                              <Link href={`/profile/${encodeURIComponent(comment.user_id)}`} aria-label={`View commenter profile`}>
+                                <Avatar name={comment.username || 'user'} url={comment.avatar_url} size={7} />
                               </Link>
                               <div className="flex-1 rounded-xl px-3 py-2" style={{ background: 'var(--bg)' }}>
-                                <p className="text-xs font-bold mb-0.5" style={{ color: 'var(--text)' }}>{post.username || email.split('@')[0]}</p>
+                                <Link href={`/profile/${encodeURIComponent(comment.user_id)}`} className="text-xs font-bold mb-0.5 hover:underline block" style={{ color: 'var(--text)' }}>{comment.username || 'user'}</Link>
                                 <p className="text-xs" style={{ color: 'var(--sub)' }}>{comment.content}</p>
                               </div>
                               {comment.user_id === userId && (

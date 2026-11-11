@@ -635,11 +635,11 @@ export default function MessagesPage() {
                 ) : people.map(person => (
                   <div key={person.id} className="flex items-center gap-2 px-3 border-b"
                     style={{ background: selectedUser?.id === person.id ? '#EEF2FF' : 'transparent', borderColor: 'var(--border)', borderLeft: selectedUser?.id === person.id ? '3px solid #6366F1' : '3px solid transparent' }}>
-                    <Link href={`/profile/${encodeURIComponent(person.username)}`} aria-label={`View ${person.username} profile`}>
+                    <Link href={`/profile/${encodeURIComponent(person.id)}`} aria-label={`View ${person.username} profile`}>
                       <Avatar person={person} size={10} />
                     </Link>
                     <div className="flex-1 min-w-0 py-3.5">
-                      <Link href={`/profile/${encodeURIComponent(person.username)}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
+                      <Link href={`/profile/${encodeURIComponent(person.id)}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
                       <p className="text-xs mt-0.5" style={{ color: isOnline(person.last_seen) ? '#10B981' : 'var(--muted)' }}>
                         {isOnline(person.last_seen) ? '● Online' : lastSeenLabel(person.last_seen)}
                       </p>
@@ -662,7 +662,7 @@ export default function MessagesPage() {
                         style={{ background: 'var(--hover-bg)', color: 'var(--text)' }}>
                         ←
                       </button>
-                      <Link href={`/profile/${encodeURIComponent(selectedUser.username)}`} className="flex items-center gap-3 group">
+                      <Link href={`/profile/${encodeURIComponent(selectedUser.id)}`} className="flex items-center gap-3 group">
                         <Avatar person={selectedUser} size={9} />
                         <div>
                         <p className="font-semibold text-sm group-hover:underline" style={{ color: 'var(--text)' }}>{selectedUser.username}</p>

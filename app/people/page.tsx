@@ -122,7 +122,7 @@ export default function PeoplePage() {
                     <div key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                       <Avatar person={person} />
                       <div className="flex-1 min-w-0">
-                        <Link href={`/profile/${person.username}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
+                        <Link href={`/profile/${encodeURIComponent(person.id)}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
                         {person.is_private && <span className="ml-1 text-[10px]">🔒</span>}
                         {person.bio && <p className="text-xs truncate mt-0.5" style={{ color: 'var(--muted)' }}>{person.bio}</p>}
                         <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{person.followerCount} followers</p>
@@ -146,7 +146,7 @@ export default function PeoplePage() {
                     <div key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                       <Avatar person={person} />
                       <div className="flex-1 min-w-0">
-                        <Link href={`/profile/${person.username}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
+                        <Link href={`/profile/${encodeURIComponent(person.id)}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
                         {person.is_private && <span className="ml-1 text-[10px]">🔒</span>}
                         {person.bio && <p className="text-xs truncate mt-0.5" style={{ color: 'var(--muted)' }}>{person.bio}</p>}
                         <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{person.followerCount} followers</p>

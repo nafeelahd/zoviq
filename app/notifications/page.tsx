@@ -85,13 +85,13 @@ export default function NotificationsPage() {
                     <div key={n.id}
                       className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition hover:shadow-md cursor-pointer"
                       style={{ background: '#EEF2FF', borderColor: '#C7D2FE' }}>
-                      <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                      <Link href={`/profile/${encodeURIComponent(n.actor_id)}`} className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
                         style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }} aria-label={`View ${n.actor_username || 'user'} profile`}>
                         {(n.actor_username || 'S')[0].toUpperCase()}
                       </Link>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm" style={{ color: 'var(--text)' }}>
-                          <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="font-semibold hover:underline">{n.actor_username}</Link>{' '}
+                          <Link href={`/profile/${encodeURIComponent(n.actor_id)}`} className="font-semibold hover:underline">{n.actor_username}</Link>{' '}
                           <Link href={getLink(n)}>{getMessage(n.type)}</Link>
                         </p>
                         <Link href={getLink(n)} className="text-xs mt-0.5 block" style={{ color: '#6366F1' }}>{timeAgo(n.created_at)}</Link>
@@ -114,13 +114,13 @@ export default function NotificationsPage() {
                     <div key={n.id}
                       className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition hover:shadow-md cursor-pointer"
                       style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-                      <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                      <Link href={`/profile/${encodeURIComponent(n.actor_id)}`} className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
                         style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }} aria-label={`View ${n.actor_username || 'user'} profile`}>
                         {(n.actor_username || 'S')[0].toUpperCase()}
                       </Link>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm" style={{ color: 'var(--text)' }}>
-                          <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="font-semibold hover:underline">{n.actor_username}</Link>{' '}
+                          <Link href={`/profile/${encodeURIComponent(n.actor_id)}`} className="font-semibold hover:underline">{n.actor_username}</Link>{' '}
                           <Link href={getLink(n)}>{getMessage(n.type)}</Link>
                         </p>
                         <Link href={getLink(n)} className="text-xs mt-0.5 block" style={{ color: 'var(--muted)' }}>{timeAgo(n.created_at)}</Link>

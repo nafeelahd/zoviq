@@ -27,7 +27,7 @@ type Post = {
 
 export default function PublicProfilePage() {
   const params = useParams<{ username: string }>()
-  const username = params.username
+  const profileKey = params.username
   const [profile, setProfile] = useState<Profile | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const [viewerId, setViewerId] = useState('')
@@ -52,18 +52,24 @@ export default function PublicProfilePage() {
       if (!active) return
       setViewerId(session.user.id)
 
-      let { data: foundProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, username, bio, avatar_url, is_private')
-        .eq('username', username.toLowerCase())
-        .maybeSingle()
+      const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profileKey)
+      const findProfile = () => byId
+        ? supabase.from('profiles').select('id, username, bio, avatar_url, is_private').eq('id', profileKey).maybeSingle()
+        : supabase.from('profiles').select('id, username, bio, avatar_url, is_private').eq('username', profileKey.toLowerCase()).maybeSingle()
+
+      let { data: foundProfile, error: profileError } = await findProfile()
       if (profileError?.message.includes('is_private')) {
         console.error('Private profile schema is not installed:', profileError)
-        const fallback = await supabase.from('profiles')
-          .select('id, username, bio, avatar_url')
-          .eq('username', username.toLowerCase())
-          .maybeSingle()
-        foundProfile = fallback.data ? { ...fallback.data, is_private: false } : null
+        const fallback = byId
+          ? await supabase.from('profiles').select('id, username, bio, avatar_url').eq('id', profileKey).maybeSingle()
+          : await supabase.from('profiles').select('id, username, bio, avatar_url').eq('username', profileKey.toLowerCase()).maybeSingle()
+        foundProfile = fallback.data ? {
+          id: fallback.data.id,
+          username: fallback.data.username,
+          bio: fallback.data.bio,
+          avatar_url: fallback.data.avatar_url,
+          is_private: false,
+        } : null
         profileError = fallback.error
         if (!fallback.error && fallback.data) {
           setError('Account privacy is not enabled yet. Ask the site owner to apply the latest Supabase setup SQL.')
@@ -119,7 +125,7 @@ export default function PublicProfilePage() {
 
     void loadProfile()
     return () => { active = false }
-  }, [username])
+  }, [profileKey])
 
   const toggleFollow = async () => {
     if (!profile || busy) return

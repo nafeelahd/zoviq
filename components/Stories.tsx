@@ -296,7 +296,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
 
             {/* Header */}
             <div className="absolute top-6 left-0 right-0 z-10 flex items-center gap-3 px-4">
-              <Link href={isMyStory ? '/profile' : `/profile/${encodeURIComponent(viewingUser.username)}`} className="flex items-center gap-2 min-w-0">
+              <Link href={isMyStory ? '/profile' : `/profile/${encodeURIComponent(viewingUser.user_id)}`} className="flex items-center gap-2 min-w-0">
                 <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                   {viewingUser.avatar_url
@@ -398,7 +398,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
                   }
                 </div>
               </button>
-              <Link href={`/profile/${encodeURIComponent(userStories.username)}`} onClick={event => event.stopPropagation()}
+              <Link href={`/profile/${encodeURIComponent(userStories.user_id)}`} onClick={event => event.stopPropagation()}
                 className="text-xs truncate w-14 text-center hover:underline" style={{ color: '#9CA3AF' }}>{userStories.username}</Link>
             </div>
           ))}

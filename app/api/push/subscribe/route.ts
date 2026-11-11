@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { isSameOriginRequest, isValidPushEndpoint, readJsonBody } from '@/lib/security'
+import { checkRateLimit } from '@/lib/serverRateLimit'
 
 type PushSubscriptionPayload = {
   endpoint?: string
@@ -17,19 +19,34 @@ function createAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Cross-origin requests are not allowed' }, { status: 403 })
+  }
+
   const supabase = createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) return NextResponse.json({ error: 'Sign in to enable notifications' }, { status: 401 })
 
-  const payload = await request.json().catch(() => null) as PushSubscriptionPayload | null
-  if (!payload?.endpoint || !payload.keys?.p256dh || !payload.keys.auth) {
+  const payload = await readJsonBody<PushSubscriptionPayload>(request, 4096)
+  if (
+    typeof payload?.endpoint !== 'string' ||
+    payload.endpoint.length > 2048 ||
+    typeof payload.keys?.p256dh !== 'string' ||
+    typeof payload.keys.auth !== 'string' ||
+    !/^[A-Za-z0-9+/_=-]{20,200}$/.test(payload.keys.p256dh) ||
+    !/^[A-Za-z0-9+/_=-]{16,100}$/.test(payload.keys.auth)
+  ) {
     return NextResponse.json({ error: 'Invalid push subscription' }, { status: 400 })
   }
-  try {
-    const endpoint = new URL(payload.endpoint)
-    if (endpoint.protocol !== 'https:') throw new Error('Invalid endpoint protocol')
-  } catch {
+  if (!isValidPushEndpoint(payload.endpoint)) {
     return NextResponse.json({ error: 'Invalid push endpoint' }, { status: 400 })
+  }
+  const rateLimit = await checkRateLimit(user.id, 'push-subscribe', 10, 3600)
+  if (rateLimit !== 'allowed') {
+    return NextResponse.json(
+      { error: rateLimit === 'limited' ? 'Too many subscription changes. Try again later.' : 'Push security checks are unavailable' },
+      { status: rateLimit === 'limited' ? 429 : 503, headers: rateLimit === 'limited' ? { 'Retry-After': '3600' } : undefined }
+    )
   }
 
   const admin = createAdminClient()
@@ -52,12 +69,28 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Cross-origin requests are not allowed' }, { status: 403 })
+  }
+
   const supabase = createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) return NextResponse.json({ error: 'Sign in to manage notifications' }, { status: 401 })
 
-  const payload = await request.json().catch(() => null) as { endpoint?: string } | null
-  if (!payload?.endpoint) return NextResponse.json({ error: 'A subscription endpoint is required' }, { status: 400 })
+  const payload = await readJsonBody<{ endpoint?: string }>(request, 4096)
+  if (typeof payload?.endpoint !== 'string' || payload.endpoint.length > 2048) {
+    return NextResponse.json({ error: 'A valid subscription endpoint is required' }, { status: 400 })
+  }
+  if (!isValidPushEndpoint(payload.endpoint)) {
+    return NextResponse.json({ error: 'Invalid push endpoint' }, { status: 400 })
+  }
+  const rateLimit = await checkRateLimit(user.id, 'push-unsubscribe', 20, 60)
+  if (rateLimit !== 'allowed') {
+    return NextResponse.json(
+      { error: rateLimit === 'limited' ? 'Too many subscription changes. Try again shortly.' : 'Push security checks are unavailable' },
+      { status: rateLimit === 'limited' ? 429 : 503, headers: rateLimit === 'limited' ? { 'Retry-After': '60' } : undefined }
+    )
+  }
 
   const admin = createAdminClient()
   if (!admin) {

@@ -19,6 +19,15 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+    const normalizedUsername = username.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,30}$/.test(normalizedUsername)) {
+      setError('Username must be 3-30 characters using letters, numbers, and underscores.')
+      return
+    }
+    if (password.length < 12) {
+      setError('Password must be at least 12 characters.')
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -26,7 +35,7 @@ export default function SignupPage() {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { username }, emailRedirectTo: `${window.location.origin}/auth/callback` },
+        options: { data: { username: normalizedUsername }, emailRedirectTo: `${window.location.origin}/auth/callback` },
       })
       if (error) throw error
       if (data.session) {
@@ -145,7 +154,7 @@ export default function SignupPage() {
           <form onSubmit={handleSignup} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Username</label>
-              <input type="text" required value={username} onChange={e => setUsername(e.target.value)}
+              <input type="text" required maxLength={30} value={username} onChange={e => setUsername(e.target.value.toLowerCase())}
                 placeholder="yourname"
                 className="w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />
@@ -159,8 +168,8 @@ export default function SignupPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Password</label>
-              <input type="password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="Min. 6 characters"
+              <input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="At least 12 characters"
                 className="w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />
             </div>

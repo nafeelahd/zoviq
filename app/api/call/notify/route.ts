@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { isSameOriginRequest, readJsonBody } from '@/lib/security'
+import { checkRateLimit } from '@/lib/serverRateLimit'
 
 type CallNotificationRequest = {
   roomName?: unknown
@@ -9,18 +11,19 @@ type CallNotificationRequest = {
 }
 
 export async function POST(request: NextRequest) {
-  let payload: CallNotificationRequest
-  try {
-    payload = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 })
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Cross-origin requests are not allowed' }, { status: 403 })
   }
 
+  const payload = await readJsonBody<CallNotificationRequest>(request, 2048)
+  if (!payload) return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 })
   const { roomName, recipientId, callType } = payload
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (
     typeof roomName !== 'string' ||
+    roomName.length > 80 ||
     typeof recipientId !== 'string' ||
-    !recipientId ||
+    !uuidPattern.test(recipientId) ||
     (callType !== 'audio' && callType !== 'video')
   ) {
     return NextResponse.json({ error: 'Invalid call notification details' }, { status: 400 })
@@ -35,6 +38,16 @@ export async function POST(request: NextRequest) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
   if (authError || !user) {
     return NextResponse.json({ error: 'Your session has expired. Please sign in again.' }, { status: 401 })
+  }
+  if (recipientId.toLowerCase() === user.id.toLowerCase()) {
+    return NextResponse.json({ error: 'You cannot call yourself' }, { status: 400 })
+  }
+  const rateLimit = await checkRateLimit(user.id, 'call-notify', 5, 60)
+  if (rateLimit !== 'allowed') {
+    return NextResponse.json(
+      { error: rateLimit === 'limited' ? 'Too many call notifications. Try again shortly.' : 'Call security checks are unavailable' },
+      { status: rateLimit === 'limited' ? 429 : 503, headers: rateLimit === 'limited' ? { 'Retry-After': '60' } : undefined }
+    )
   }
 
   const expectedRoom = `dm-${[user.id, recipientId].sort().join('-')}`
@@ -54,6 +67,15 @@ export async function POST(request: NextRequest) {
   const admin = createSupabaseClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+  const { data: recipient, error: recipientError } = await admin.auth.admin.getUserById(recipientId)
+  if (recipientError) {
+    console.error('Could not verify call recipient:', recipientError)
+    return NextResponse.json({ error: 'Could not verify the call recipient' }, { status: 500 })
+  }
+  if (!recipient.user) {
+    return NextResponse.json({ error: 'Call recipient was not found' }, { status: 404 })
+  }
+
   const { error } = await admin.from('notifications').insert({
     user_id: recipientId,
     actor_id: user.id,
@@ -64,9 +86,7 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error('Could not create call notification:', error)
-    return NextResponse.json({
-      error: `Could not create the call notification: ${error.message}`,
-    }, { status: 500 })
+    return NextResponse.json({ error: 'Could not create the call notification' }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

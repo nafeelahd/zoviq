@@ -53,7 +53,7 @@ export default function Stories({ userId, email }: { userId: string; email: stri
     if (viewingUser) {
       setProgress(0)
       const currentStory = viewingUser.stories[storyIndex]
-      if (currentStory) markViewed(currentStory.id)
+      if (currentStory && viewingUser.user_id !== userId) markViewed(currentStory.id)
 
       progressRef.current = setInterval(() => {
         setProgress(p => {

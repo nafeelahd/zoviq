@@ -76,15 +76,19 @@ export default function ProfilePage() {
   }
 
   const saveProfile = async () => {
-    if (!username.trim()) { setProfileMsg('Username cannot be empty'); return }
+    const normalizedUsername = username.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,30}$/.test(normalizedUsername)) {
+      setProfileMsg('Username must be 3-30 characters using letters, numbers, and underscores.')
+      return
+    }
     setSavingProfile(true)
     setProfileMsg('')
     const supabase = createClient()
 
-    const { data: existing } = await supabase.from('profiles').select('id').eq('username', username.trim()).neq('id', userId).single()
+    const { data: existing } = await supabase.from('profiles').select('id').eq('username', normalizedUsername).neq('id', userId).single()
     if (existing) { setProfileMsg('Username already taken'); setSavingProfile(false); return }
 
-    const { error } = await supabase.from('profiles').update({ username: username.trim(), bio: bio.trim() }).eq('id', userId)
+    const { error } = await supabase.from('profiles').update({ username: normalizedUsername, bio: bio.trim() }).eq('id', userId)
     if (error) { setProfileMsg(error.message) } else { setEditingProfile(false); fetchProfile(userId) }
     setSavingProfile(false)
   }
@@ -148,8 +152,8 @@ export default function ProfilePage() {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Username</label>
-                    <input type="text" value={username} onChange={e => setUsername(e.target.value)}
-                      placeholder="username" maxLength={30}
+                    <input type="text" maxLength={30} value={username} onChange={e => setUsername(e.target.value.toLowerCase())}
+                      placeholder="username"
                       className="w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                       style={{ borderColor: 'var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }} />
                   </div>

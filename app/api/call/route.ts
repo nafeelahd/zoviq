@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isSameOriginRequest, readJsonBody } from '@/lib/security'
+import { checkRateLimit } from '@/lib/serverRateLimit'
 
 type DailyRoom = {
   url?: string
@@ -9,15 +11,17 @@ type DailyRoom = {
 }
 
 export async function POST(request: NextRequest) {
-  let roomName: unknown
-  try {
-    ({ roomName } = await request.json())
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 })
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Cross-origin requests are not allowed' }, { status: 403 })
   }
 
+  const payload = await readJsonBody<{ roomName?: unknown }>(request, 1024)
+  const { roomName } = payload || {}
   if (typeof roomName !== 'string' || !roomName.trim()) {
     return NextResponse.json({ error: 'A room name is required' }, { status: 400 })
+  }
+  if (roomName.length > 80) {
+    return NextResponse.json({ error: 'Room name is too long' }, { status: 400 })
   }
 
   const supabase = createClient()
@@ -27,11 +31,20 @@ export async function POST(request: NextRequest) {
   if (authError || !user) {
     return NextResponse.json({ error: 'You must be signed in to join a call' }, { status: 401 })
   }
+  const rateLimit = await checkRateLimit(user.id, 'call-room', 10, 60)
+  if (rateLimit !== 'allowed') {
+    return NextResponse.json(
+      { error: rateLimit === 'limited' ? 'Too many call requests. Try again shortly.' : 'Call security checks are unavailable' },
+      { status: rateLimit === 'limited' ? 429 : 503, headers: rateLimit === 'limited' ? { 'Retry-After': '60' } : undefined }
+    )
+  }
 
   const requestedRoom = roomName.trim().toLowerCase()
   let authorized = false
-  if (requestedRoom.startsWith('group-')) {
-    const groupId = requestedRoom.slice('group-'.length)
+  const groupMatch = requestedRoom.match(/^group-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/)
+  const directMatch = requestedRoom.match(/^dm-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/)
+  if (groupMatch) {
+    const groupId = groupMatch[1]
     const { data: membership, error } = await supabase
       .from('group_members')
       .select('id')
@@ -43,30 +56,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not verify group membership' }, { status: 500 })
     }
     authorized = Boolean(membership)
-  } else if (requestedRoom.startsWith('dm-')) {
-    authorized = requestedRoom.startsWith(`dm-${user.id}-`) || requestedRoom.endsWith(`-${user.id}`)
+  } else if (directMatch) {
+    const participantIds = [directMatch[1], directMatch[2]]
+    authorized = participantIds[0] !== participantIds[1]
+      && participantIds.includes(user.id.toLowerCase())
+      && requestedRoom === `dm-${participantIds.sort().join('-')}`
   }
 
   if (!authorized) {
     return NextResponse.json({ error: 'You are not allowed to join this call' }, { status: 403 })
   }
 
-  const apiKey = process.env.DAILY_API_KEY || process.env.NEXT_PUBLIC_DAILY_API_KEY
+  const apiKey = process.env.DAILY_API_KEY
   if (!apiKey) {
     return NextResponse.json({
       error: 'Daily API key is not configured. Add DAILY_API_KEY to your deployment environment and redeploy.',
     }, { status: 500 })
   }
 
-  const sanitized = roomName
-    .trim()
-    .replace(/[^a-zA-Z0-9-]/g, '-')
-    .toLowerCase()
-    .slice(0, 40)
-
-  if (!/[a-z0-9]/.test(sanitized)) {
-    return NextResponse.json({ error: 'Room name must contain at least one letter or number' }, { status: 400 })
-  }
+  const sanitized = requestedRoom
 
   const headers = { Authorization: `Bearer ${apiKey}` }
 

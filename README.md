@@ -102,8 +102,8 @@ npm install
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. Create the database tables listed under [Database](#database).
-3. Go to **Storage**, create a **public** bucket named `posts`, and add policies that allow signed-in users to upload and everyone to read.
-4. Go to **Authentication > Providers > Email**. Turn **Confirm email** off while developing, or set up custom SMTP so confirmation emails are delivered.
+3. Go to **Storage** and create a **public** bucket named `posts`. Run the setup SQL after creating all application tables to apply owner-scoped write policies. Public bucket objects remain readable by anyone with their URL.
+4. Go to **Authentication > Providers > Email** and keep email confirmation enabled in production. Configure custom SMTP so confirmation and password-reset emails are delivered.
 
 ### 3. Create a Daily.co account
 
@@ -124,9 +124,9 @@ VAPID_SUBJECT=mailto:you@example.com
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
-Generate the VAPID pair with `npx web-push generate-vapid-keys`. Keep `DAILY_API_KEY`, `VAPID_PRIVATE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` server-only; never use the `NEXT_PUBLIC_` prefix for them. The service-role key is available in your Supabase project's API settings and is used by the server to store call invitations and push subscriptions. Never commit `.env.local`; it is already listed in `.gitignore`. If your deployment still uses the old `NEXT_PUBLIC_DAILY_API_KEY` variable, the server accepts it temporarily; replace it with `DAILY_API_KEY` to keep the key private.
+Generate the VAPID pair with `npx web-push generate-vapid-keys`. Keep `DAILY_API_KEY`, `VAPID_PRIVATE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` server-only; never use the `NEXT_PUBLIC_` prefix for them. The service-role key is available in your Supabase project's API settings and is used by the server for privileged operations. Never commit `.env.local`; it is already listed in `.gitignore`. If `NEXT_PUBLIC_DAILY_API_KEY` was ever configured, rotate that key because it may have been exposed in browser bundles, remove it from all environments, and use only `DAILY_API_KEY`.
 
-Push notifications require HTTPS (localhost is allowed for development), VAPID keys, and the Supabase service-role key. After setting the variables, restart or redeploy the app, sign in, and select **Settings → Turn on push notifications**. Run the updated `supabase-setup.sql` to create the server-managed push-subscription and message visibility tables, add required audio columns, and enable message deletion policies.
+Push notifications require HTTPS (localhost is allowed for development), VAPID keys, and the Supabase service-role key. After setting the variables, restart or redeploy the app, sign in, and select **Settings → Turn on push notifications**. Run `supabase-setup.sql` after creating all application tables. It creates server-managed push-subscription and message-visibility tables, adds attachment columns, and installs the app's row-level and storage policies.
 
 ### 5. Run it
 
@@ -153,6 +153,7 @@ Tables used by the app:
 | `message_hidden_for` | `user_id`, `message_type`, `conversation_id`, `message_id` (created by `supabase-setup.sql`) |
 | `notifications` | `user_id`, `actor_id`, `type`, `post_id`, `group_id`, `call_room`, `read` |
 | `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth` (created by `supabase-setup.sql`) |
+| `api_rate_limits` | Server-only API request windows (created by `supabase-setup.sql`) |
 | `stories` | `user_id`, `image_url`, `video_url`, `expires_at` |
 | `story_views` | `story_id`, `viewer_id` (unique pair) |
 | `groups` | `name`, `description`, `image_url`, `created_by`, `privacy` |
@@ -160,7 +161,19 @@ Tables used by the app:
 | `group_requests` | `group_id`, `user_id`, `status` |
 | `group_messages` | `group_id`, `user_id`, `content`, `image_url`, `video_url`, `audio_url` |
 
-Enable Row Level Security on every table and add policies that match how each table is used. `supabase-setup.sql` in this repo creates the `profiles` table and the trigger that adds a profile row when a user signs up. After creating the `messages` and `group_messages` tables, run the setup SQL again to add media columns, per-user message visibility, sender-only delete-for-everyone policies, and storage cleanup permissions for message attachments.
+`supabase-setup.sql` creates the `profiles` table and signup trigger, enables Row Level Security, and installs policies for the tables listed above. The setup section replaces existing policies on these app-owned tables, so back up and review custom policies before running it. Run the script only after all listed application tables exist; the policy definitions use the documented columns. Storage writes are restricted to each user's own object paths. Because the `posts` bucket is public and the app stores public URLs for all media, uploaded message attachments are also publicly retrievable by URL; do not use this storage design for confidential media.
+
+---
+
+## Security deployment checklist
+
+- Use HTTPS in production; the app sends HSTS and other browser security headers in production and refreshes Supabase sessions in middleware before rendering protected pages.
+- Keep email confirmation enabled, configure exact production redirect URLs, and set a strong Supabase password policy (minimum 12 characters plus leaked-password protection where available). The UI also enforces a 12-character minimum; provider-side enforcement is required for API clients that bypass the UI.
+- Configure Supabase Auth rate limits and CAPTCHA for sign-up and password recovery, and use custom SMTP. The application does not implement MFA, per-user content privacy, account lockout, or a full report/block/moderation workflow.
+- Treat the `posts` storage bucket as public. RLS protects writes but cannot make objects in a public bucket private.
+- Keep the Supabase service-role key and Daily/VAPID private keys in server-only deployment secrets. Rotate any secret that was previously published or exposed.
+- Call and push endpoints use database-backed per-user rate limits; only the service role can consume rate-limit buckets.
+- Run the app's RLS setup in a staging project first and verify public posts, private group membership, direct messages, story expiry, notifications, and account deletion behavior against your actual table definitions.
 
 ---
 
@@ -223,8 +236,8 @@ Vercel runs a strict TypeScript build, so run `npm run build` locally first to c
 - Incoming direct and group calls are detected on the Messages page, so the other person sees the ringing screen only while that page is open.
 - Video trimming runs in the browser with FFmpeg WebAssembly; its core is downloaded from unpkg the first time a user trims a video.
 - Delete account removes the user's data and signs them out. Removing the auth user itself needs a server-side admin call.
-- Some Row Level Security policies for groups, stories and notifications are open so development is easy. Tighten them before real users sign up.
-- Calls use the server-only `DAILY_API_KEY` environment variable. Add it to your local `.env.local` and deployment environment; never expose it with the `NEXT_PUBLIC_` prefix. The old `NEXT_PUBLIC_DAILY_API_KEY` name is temporarily supported for existing deployments.
+- The setup SQL installs least-privilege app policies; apply it to a staging project first and check it against the deployed schema.
+- Calls use only the server-only `DAILY_API_KEY` environment variable. Never expose it with the `NEXT_PUBLIC_` prefix.
 
 ---
 

@@ -24,8 +24,8 @@ export default function SignupPage() {
       setError('Username must be 3-30 characters using letters, numbers, and underscores.')
       return
     }
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters.')
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
       return
     }
     setLoading(true)
@@ -168,8 +168,8 @@ export default function SignupPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Password</label>
-              <input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="At least 12 characters"
+              <input type="password" required minLength={6} maxLength={128} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
                 className="w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />
             </div>

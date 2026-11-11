@@ -16,7 +16,7 @@ export default function ChangePasswordPage() {
     setError(''); setSuccess(false)
 
     if (newPassword !== confirmPassword) { setError("Passwords don't match"); return }
-    if (newPassword.length < 12) { setError('Password must be at least 12 characters'); return }
+    if (newPassword.length < 6) { setError('Password must be at least 6 characters'); return }
 
     setLoading(true)
     const supabase = createClient()
@@ -49,8 +49,8 @@ export default function ChangePasswordPage() {
           <form onSubmit={handleChange} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>New Password</label>
-              <input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                placeholder="At least 12 characters"
+              <input type="password" required minLength={6} maxLength={128} autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                placeholder="At least 6 characters"
                 className="w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />
             </div>
@@ -68,7 +68,7 @@ export default function ChangePasswordPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Confirm New Password</label>
-              <input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+              <input type="password" required minLength={6} maxLength={128} autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
                 placeholder="Repeat your password"
                 className="w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
                 style={{ borderColor: '#E5E7EB', background: '#FAFAFA' }} />

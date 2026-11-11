@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 
@@ -10,6 +10,13 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) window.location.replace('/auth/login')
+    })
+  }, [])
 
   const handleChange = async (e: React.FormEvent) => {
     e.preventDefault()

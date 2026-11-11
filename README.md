@@ -167,7 +167,7 @@ Tables used by the app:
 
 ## Security deployment checklist
 
-- Use HTTPS in production; the app sends HSTS and other browser security headers in production and refreshes Supabase sessions in middleware before rendering protected pages.
+- Use HTTPS in production; the app sends HSTS and other browser security headers in production. Protected pages check the browser session, while Supabase RLS and authenticated API handlers enforce access to data and actions. Middleware refreshes sessions when Supabase verification succeeds and lets page-level checks handle temporary verification failures.
 - Keep email confirmation enabled, configure exact production redirect URLs, and set the Supabase password minimum to 6 characters plus leaked-password protection where available. The UI also enforces a 6-character minimum; provider-side enforcement is required for API clients that bypass the UI.
 - Configure Supabase Auth rate limits and CAPTCHA for sign-up and password recovery, and use custom SMTP. The application does not implement MFA, per-user content privacy, account lockout, or a full report/block/moderation workflow.
 - Treat the `posts` storage bucket as public. RLS protects writes but cannot make objects in a public bucket private.

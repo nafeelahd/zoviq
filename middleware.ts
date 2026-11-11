@@ -61,13 +61,10 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const redirectToLogin = (showSessionError = false) => {
+  const redirectToLogin = () => {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/auth/login'
     loginUrl.search = ''
-    if (showSessionError) {
-      loginUrl.searchParams.set('authError', 'session')
-    }
     const redirect = NextResponse.redirect(loginUrl)
     response.cookies.getAll().forEach(({ name, value, ...options }) => {
       redirect.cookies.set(name, value, options)
@@ -88,7 +85,7 @@ export async function middleware(request: NextRequest) {
     authError = result.error
   } catch (error) {
     console.error('Session verification failed:', error)
-    return redirectToLogin(true)
+    return response
   } finally {
     if (authTimeout) {
       clearTimeout(authTimeout)
@@ -97,7 +94,7 @@ export async function middleware(request: NextRequest) {
 
   if (authError) {
     console.error('Session verification returned an error:', authError)
-    return redirectToLogin(true)
+    return response
   }
 
   if (!user) {

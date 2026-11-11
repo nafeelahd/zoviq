@@ -306,6 +306,8 @@ create policy "Profiles are publicly viewable" on public.profiles
 create policy "Users update their own profiles" on public.profiles
   for update using (auth.uid() = id) with check (auth.uid() = id);
 revoke insert, delete on public.profiles from anon, authenticated;
+grant select on public.profiles to anon, authenticated;
+grant update (username, bio, avatar_url, last_seen, is_private) on public.profiles to authenticated;
 
 create or replace function public.can_view_profile(target_profile_id uuid)
 returns boolean

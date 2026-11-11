@@ -143,7 +143,7 @@ export default function ProfilePage() {
       .eq('id', userId)
     if (error) {
       console.error('Could not update account privacy:', error)
-      setPrivacyError('Could not update privacy. Apply the latest Supabase setup SQL and try again.')
+      setPrivacyError(`Could not update privacy: ${error.message}`)
     } else {
       setProfile({ ...profile, is_private: !makePublic })
       if (makePublic) {

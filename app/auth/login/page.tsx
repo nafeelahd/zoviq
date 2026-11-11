@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import AuthShell from '@/components/auth/AuthShell'
 import AuthNotice from '@/components/auth/AuthNotice'
@@ -10,6 +10,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('authError') === 'session') {
+      setError('We could not verify your session. Please try signing in again.')
+    }
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

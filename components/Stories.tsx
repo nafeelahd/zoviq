@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CameraCapture from '@/components/CameraCapture'
+import PostMedia from '@/components/PostMedia'
 import { muteVideo } from '@/lib/muteVideo'
 
 type Story = {
@@ -148,18 +149,17 @@ export default function Stories({ userId, email }: { userId: string; email: stri
       const file = mute ? await muteVideo(sourceFile) : sourceFile
       const supabase = createClient()
       const ext = file.name.split('.').pop()
-      const path = `stories/${userId}/${Date.now()}.${ext}`
+      const path = `${userId}/${Date.now()}.${ext}`
 
-      const { error: uploadErr } = await supabase.storage.from('posts').upload(path, file, { upsert: true, cacheControl: '3600' })
+      const { error: uploadErr } = await supabase.storage.from('private-posts').upload(path, file, { upsert: true, cacheControl: '3600' })
       if (uploadErr) throw new Error('Upload failed: ' + uploadErr.message)
 
-      const { data: urlData } = supabase.storage.from('posts').getPublicUrl(path)
       const isVideo = file.type.startsWith('video/')
 
       const { error: insertErr } = await supabase.from('stories').insert({
         user_id: userId,
-        image_url: isVideo ? null : urlData.publicUrl,
-        video_url: isVideo ? urlData.publicUrl : null,
+        image_url: isVideo ? null : `private-posts:${path}`,
+        video_url: isVideo ? `private-posts:${path}` : null,
       })
 
       if (insertErr) throw new Error('Story failed: ' + insertErr.message)
@@ -321,8 +321,8 @@ export default function Stories({ userId, email }: { userId: string; email: stri
             {/* Media */}
             <div className="w-full h-full flex items-center justify-center bg-black">
               {currentStory.video_url
-                ? <video key={currentStory.id} src={currentStory.video_url} autoPlay className="w-full h-full object-contain" />
-                : <img key={currentStory.id} src={currentStory.image_url!} alt="story" className="w-full h-full object-contain" />
+                ? <PostMedia key={currentStory.id} src={currentStory.video_url} alt="story" video autoPlay className="w-full h-full object-contain" />
+                : <PostMedia key={currentStory.id} src={currentStory.image_url!} alt="story" className="w-full h-full object-contain" />
               }
             </div>
           </div>

@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import Link from 'next/link'
+import PostMedia from '@/components/PostMedia'
 
-type Post = { id: string; content: string; image_url: string | null; created_at: string; user_id: string }
-type Profile = { id: string; username: string; bio: string | null; avatar_url: string | null }
+type Post = { id: string; content: string; image_url: string | null; video_url: string | null; created_at: string; user_id: string }
+type Profile = { id: string; username: string; bio: string | null; avatar_url: string | null; is_private: boolean }
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
@@ -111,7 +113,8 @@ export default function SearchPage() {
           <div className="space-y-3">
             {posts.map(post => (
               <div key={post.id} className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-                {post.image_url && <img src={post.image_url} alt="post" className="w-full max-h-48 object-cover" />}
+                {post.image_url && <PostMedia src={post.image_url} alt="post" className="w-full max-h-48 object-cover" />}
+                {post.video_url && <PostMedia src={post.video_url} alt="post video" video className="w-full max-h-48 bg-black" />}
                 <div className="p-4">
                   <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{highlight(post.content)}</p>
                   <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>{timeAgo(post.created_at)}</p>
@@ -125,19 +128,17 @@ export default function SearchPage() {
         {!loading && tab === 'people' && people.length > 0 && (
           <div className="space-y-2">
             {people.map(person => (
-              <div key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+              <Link href={`/profile/${person.username}`} key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                 <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 overflow-hidden"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
                   {person.avatar_url ? <img src={person.avatar_url} alt={person.username} className="w-full h-full object-cover" /> : person.username[0].toUpperCase()}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{highlight(person.username)}</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{highlight(person.username)} {person.is_private && <span className="text-xs">🔒</span>}</p>
                   {person.bio && <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--muted)' }}>{person.bio}</p>}
                 </div>
-                {person.id !== userId && (
-                  <a href="/people" className="text-xs font-semibold hover:underline" style={{ color: '#6366F1' }}>View →</a>
-                )}
-              </div>
+                {person.id !== userId && <span className="text-xs font-semibold" style={{ color: '#6366F1' }}>View →</span>}
+              </Link>
             ))}
           </div>
         )}

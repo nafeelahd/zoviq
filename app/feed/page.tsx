@@ -7,6 +7,7 @@ import Stories from '@/components/Stories'
 import Navbar from '@/components/Navbar'
 import ShareModal from '@/components/ShareModal'
 import CameraCapture from '@/components/CameraCapture'
+import PostMedia from '@/components/PostMedia'
 import { insertNotification } from '@/lib/notifications'
 
 type Comment = { id: string; content: string; created_at: string; user_id: string }
@@ -118,11 +119,10 @@ export default function FeedPage() {
     if (mediaFile) {
       const ext = mediaFile.name.split('.').pop()
       const path = `${session.user.id}/${Date.now()}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('posts').upload(path, mediaFile)
+      const { error: uploadError } = await supabase.storage.from('private-posts').upload(path, mediaFile)
       if (uploadError) { setError('Upload failed: ' + uploadError.message); setPosting(false); return }
-      const { data: urlData } = supabase.storage.from('posts').getPublicUrl(path)
-      if (mediaType === 'video') video_url = urlData.publicUrl
-      else image_url = urlData.publicUrl
+      if (mediaType === 'video') video_url = `private-posts:${path}`
+      else image_url = `private-posts:${path}`
     }
 
     const { error } = await supabase.from('posts').insert({ content: content.trim(), user_id: session.user.id, image_url, video_url })
@@ -294,8 +294,8 @@ export default function FeedPage() {
                   </div>
 
                   {/* Media */}
-                  {post.image_url && <img src={post.image_url} alt="post" className="w-full max-h-96 object-cover" />}
-                  {post.video_url && <video src={post.video_url} controls className="w-full max-h-96 bg-black" playsInline />}
+                  {post.image_url && <PostMedia src={post.image_url} alt="post" className="w-full max-h-96 object-cover" />}
+                  {post.video_url && <PostMedia src={post.video_url} alt="post video" video className="w-full max-h-96 bg-black" />}
 
                   {/* Content */}
                   {post.content && <p className="text-sm leading-relaxed px-4 pt-3 pb-1" style={{ color: 'var(--text)' }}>{post.content}</p>}

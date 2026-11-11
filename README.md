@@ -26,7 +26,8 @@ Built with Next.js, Supabase and Daily.co.
 - Sign up, log in and log out with email and password
 - Forgot password and reset password by email
 - Change password and delete account from Settings
-- Edit profile: username, bio and profile picture
+- Edit profile: username, bio, profile picture, and public/private account visibility
+- View profiles by username, send follow requests to private accounts, and approve or remove requests
 
 **Feed**
 - Text, photo and video posts
@@ -43,7 +44,7 @@ Built with Next.js, Supabase and Daily.co.
 - Tap to move forward or back, view tracking, delete your own stories
 
 **People**
-- Follow and unfollow, follower and following counts
+- Follow and unfollow public accounts, request access to private accounts, follower and following counts
 
 **Messaging**
 - One-to-one direct messages with read receipts
@@ -102,7 +103,7 @@ npm install
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. Create the database tables listed under [Database](#database).
-3. Go to **Storage** and create a **public** bucket named `posts`. Run the setup SQL after creating all application tables to apply owner-scoped write policies. Public bucket objects remain readable by anyone with their URL.
+3. Go to **Storage** and create a **public** bucket named `posts` for legacy media and message attachments. Run the setup SQL after creating all application tables; it also creates the private `private-posts` bucket for new post and story media. Objects already stored in the public bucket remain readable by anyone with their URL.
 4. Go to **Authentication > Providers > Email** and keep email confirmation enabled in production. Configure custom SMTP so confirmation and password-reset emails are delivered.
 
 ### 3. Create a Daily.co account
@@ -144,11 +145,12 @@ Tables used by the app:
 
 | Table | Purpose |
 |---|---|
-| `profiles` | `id`, `username`, `bio`, `avatar_url`, `last_seen` |
+| `profiles` | `id`, `username`, `bio`, `avatar_url`, `last_seen`, `is_private` |
 | `posts` | `user_id`, `content`, `image_url`, `video_url` |
 | `likes` | `user_id`, `post_id` (unique pair) |
 | `comments` | `user_id`, `post_id`, `content` |
 | `follows` | `follower_id`, `following_id` (unique pair) |
+| `follow_requests` | `follower_id`, `following_id`, `created_at` (created by `supabase-setup.sql`) |
 | `messages` | `sender_id`, `receiver_id`, `content`, `image_url`, `video_url`, `audio_url`, `read` |
 | `message_hidden_for` | `user_id`, `message_type`, `conversation_id`, `message_id` (created by `supabase-setup.sql`) |
 | `notifications` | `user_id`, `actor_id`, `type`, `post_id`, `group_id`, `call_room`, `read` |
@@ -161,7 +163,7 @@ Tables used by the app:
 | `group_requests` | `group_id`, `user_id`, `status` |
 | `group_messages` | `group_id`, `user_id`, `content`, `image_url`, `video_url`, `audio_url` |
 
-`supabase-setup.sql` creates the `profiles` table and signup trigger, enables Row Level Security, and installs policies for the tables listed above. The setup section replaces existing policies on these app-owned tables, so back up and review custom policies before running it. Run the script only after all listed application tables exist; the policy definitions use the documented columns. Storage writes are restricted to each user's own object paths. Because the `posts` bucket is public and the app stores public URLs for all media, uploaded message attachments are also publicly retrievable by URL; do not use this storage design for confidential media.
+`supabase-setup.sql` creates the `profiles` and `follow_requests` tables, signup trigger, private `private-posts` storage bucket, and row-level/storage policies. It replaces existing policies on app-owned tables, so back up and review custom policies before running it. Run the script only after all other application tables exist. New post and story media use the private bucket and are signed for approved viewers. Existing post/story URLs and message attachments in the public `posts` bucket remain publicly retrievable by URL; migrate old media separately if it must be private.
 
 ---
 
@@ -169,8 +171,9 @@ Tables used by the app:
 
 - Use HTTPS in production; the app sends HSTS and other browser security headers in production. Protected pages check the browser session, while Supabase RLS and authenticated API handlers enforce access to data and actions. Middleware refreshes sessions when Supabase verification succeeds and lets page-level checks handle temporary verification failures.
 - Keep email confirmation enabled, configure exact production redirect URLs, and set the Supabase password minimum to 6 characters plus leaked-password protection where available. The UI also enforces a 6-character minimum; provider-side enforcement is required for API clients that bypass the UI.
-- Configure Supabase Auth rate limits and CAPTCHA for sign-up and password recovery, and use custom SMTP. The application does not implement MFA, per-user content privacy, account lockout, or a full report/block/moderation workflow.
-- Treat the `posts` storage bucket as public. RLS protects writes but cannot make objects in a public bucket private.
+- Configure Supabase Auth rate limits and CAPTCHA for sign-up and password recovery, and use custom SMTP. The application does not implement MFA, account lockout, or a full report/block/moderation workflow.
+- Apply the latest `supabase-setup.sql` to enable private accounts, follow requests, the private media bucket, and the related RLS policies.
+- Treat legacy objects in the public `posts` storage bucket as public. RLS cannot make public-bucket objects private; migrate old post/story media before relying on privacy for previously uploaded content. Message attachments still use that bucket.
 - Keep the Supabase service-role key and Daily/VAPID private keys in server-only deployment secrets. Rotate any secret that was previously published or exposed.
 - Call and push endpoints use database-backed per-user rate limits; only the service role can consume rate-limit buckets.
 - Run the app's RLS setup in a staging project first and verify public posts, private group membership, direct messages, story expiry, notifications, and account deletion behavior against your actual table definitions.

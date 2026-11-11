@@ -7,11 +7,25 @@ create table if not exists public.profiles (
   bio text,
   avatar_url text,
   last_seen timestamp with time zone,
+  is_private boolean not null default false,
   created_at timestamp with time zone default now()
 );
 
 alter table public.profiles
   add column if not exists last_seen timestamp with time zone;
+alter table public.profiles
+  add column if not exists is_private boolean not null default false;
+
+create table if not exists public.follow_requests (
+  follower_id uuid not null references auth.users(id) on delete cascade,
+  following_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamp with time zone not null default now(),
+  primary key (follower_id, following_id),
+  check (follower_id <> following_id)
+);
+
+alter table public.follow_requests enable row level security;
+grant select, insert, delete on public.follow_requests to authenticated;
 
 do $$
 begin
@@ -227,7 +241,7 @@ declare
   policy_name text;
 begin
   foreach table_name in array array[
-    'profiles', 'posts', 'likes', 'comments', 'follows', 'messages',
+    'profiles', 'posts', 'likes', 'comments', 'follows', 'follow_requests', 'messages',
     'notifications', 'stories', 'story_views', 'groups', 'group_members',
     'group_requests', 'group_messages', 'message_hidden_for', 'push_subscriptions',
     'api_rate_limits'
@@ -293,8 +307,82 @@ create policy "Users update their own profiles" on public.profiles
   for update using (auth.uid() = id) with check (auth.uid() = id);
 revoke insert, delete on public.profiles from anon, authenticated;
 
+create or replace function public.can_view_profile(target_profile_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select auth.uid() = target_profile_id
+    or exists (
+      select 1
+      from public.profiles p
+      where p.id = target_profile_id
+        and (
+          not p.is_private
+          or exists (
+            select 1 from public.follows f
+            where f.follower_id = auth.uid()
+              and f.following_id = target_profile_id
+          )
+        )
+    )
+$$;
+revoke all on function public.can_view_profile(uuid) from public, anon;
+grant execute on function public.can_view_profile(uuid) to authenticated;
+
+create or replace function public.can_view_profile_media(owner_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id::text = owner_id
+      and (
+        auth.uid() = p.id
+        or not p.is_private
+        or exists (
+          select 1 from public.follows f
+          where f.follower_id = auth.uid()
+            and f.following_id = p.id
+        )
+      )
+  )
+$$;
+revoke all on function public.can_view_profile_media(text) from public, anon;
+grant execute on function public.can_view_profile_media(text) to authenticated;
+
+create or replace function public.accept_follow_request(requester_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if auth.uid() is null or requester_id = auth.uid() or not exists (
+    select 1 from public.follow_requests r
+    where r.follower_id = requester_id and r.following_id = auth.uid()
+  ) then
+    raise exception 'Follow request not found';
+  end if;
+
+  insert into public.follows (follower_id, following_id)
+  values (requester_id, auth.uid())
+  on conflict (follower_id, following_id) do nothing;
+
+  delete from public.follow_requests
+  where follower_id = requester_id and following_id = auth.uid();
+end;
+$$;
+revoke all on function public.accept_follow_request(uuid) from public, anon;
+grant execute on function public.accept_follow_request(uuid) to authenticated;
+
 create policy "Posts are publicly viewable" on public.posts
-  for select using (true);
+  for select using (public.can_view_profile(user_id));
 create policy "Users create their own posts" on public.posts
   for insert with check (auth.uid() = user_id);
 create policy "Users update their own posts" on public.posts
@@ -303,25 +391,66 @@ create policy "Users delete their own posts" on public.posts
   for delete using (auth.uid() = user_id);
 
 create policy "Likes are publicly viewable" on public.likes
-  for select using (true);
+  for select using (
+    exists (
+      select 1 from public.posts p
+      where p.id = post_id and public.can_view_profile(p.user_id)
+    )
+  );
 create policy "Users create their own likes" on public.likes
-  for insert with check (auth.uid() = user_id);
+  for insert with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.posts p
+      where p.id = post_id and public.can_view_profile(p.user_id)
+    )
+  );
 create policy "Users remove their own likes" on public.likes
   for delete using (auth.uid() = user_id);
 
 create policy "Comments are publicly viewable" on public.comments
-  for select using (true);
+  for select using (
+    exists (
+      select 1 from public.posts p
+      where p.id = post_id and public.can_view_profile(p.user_id)
+    )
+  );
 create policy "Users create their own comments" on public.comments
-  for insert with check (auth.uid() = user_id);
+  for insert with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.posts p
+      where p.id = post_id and public.can_view_profile(p.user_id)
+    )
+  );
 create policy "Users delete their own comments" on public.comments
   for delete using (auth.uid() = user_id);
 
 create policy "Follows are publicly viewable" on public.follows
   for select using (true);
 create policy "Users follow from their own account" on public.follows
-  for insert with check (auth.uid() = follower_id and follower_id <> following_id);
+  for insert with check (
+    auth.uid() = follower_id and follower_id <> following_id
+    and exists (
+      select 1 from public.profiles p
+      where p.id = following_id and not p.is_private
+    )
+  );
 create policy "Users unfollow from their own account" on public.follows
   for delete using (auth.uid() = follower_id);
+
+create policy "Users view follow requests they are part of" on public.follow_requests
+  for select using (auth.uid() = follower_id or auth.uid() = following_id);
+create policy "Users request to follow private accounts" on public.follow_requests
+  for insert with check (
+    auth.uid() = follower_id and follower_id <> following_id
+    and exists (
+      select 1 from public.profiles p
+      where p.id = following_id and p.is_private
+    )
+  );
+create policy "Requesters and recipients remove follow requests" on public.follow_requests
+  for delete using (auth.uid() = follower_id or auth.uid() = following_id);
 
 create policy "Conversation participants view messages" on public.messages
   for select using (auth.uid() = sender_id or auth.uid() = receiver_id);
@@ -395,7 +524,7 @@ revoke update on public.notifications from anon, authenticated;
 grant update (read) on public.notifications to authenticated;
 
 create policy "Users view unexpired stories" on public.stories
-  for select using (expires_at > now());
+  for select using (expires_at > now() and public.can_view_profile(user_id));
 create policy "Users create their own stories" on public.stories
   for insert with check (auth.uid() = user_id);
 create policy "Users delete their own stories" on public.stories
@@ -411,7 +540,8 @@ create policy "Users record their own story views" on public.story_views
     auth.uid() = viewer_id
     and exists (
       select 1 from public.stories s
-      where s.id = story_id and s.user_id <> auth.uid() and s.expires_at > now()
+      where s.id = story_id and s.user_id <> auth.uid()
+        and s.expires_at > now() and public.can_view_profile(s.user_id)
     )
   );
 create policy "Users update their own story views" on public.story_views
@@ -518,6 +648,30 @@ create policy "Authenticated users manage their own post media"
   on storage.objects for all to authenticated
   using (bucket_id = 'posts' and public.owns_post_media(name))
   with check (bucket_id = 'posts' and public.owns_post_media(name));
+
+insert into storage.buckets (id, name, public)
+values ('private-posts', 'private-posts', false)
+on conflict (id) do update set public = false;
+
+drop policy if exists "Users view authorized private profile media" on storage.objects;
+create policy "Users view authorized private profile media"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'private-posts'
+    and public.can_view_profile_media(split_part(name, '/', 1))
+  );
+
+drop policy if exists "Users manage their private profile media" on storage.objects;
+create policy "Users manage their private profile media"
+  on storage.objects for all to authenticated
+  using (
+    bucket_id = 'private-posts'
+    and split_part(name, '/', 1) = auth.uid()::text
+  )
+  with check (
+    bucket_id = 'private-posts'
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
 
 drop policy if exists "Restrict post media uploads to owners" on storage.objects;
 create policy "Restrict post media uploads to owners"

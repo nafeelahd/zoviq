@@ -4,14 +4,16 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import { insertNotification } from '@/lib/notifications'
+import Link from 'next/link'
 
-type Person = { id: string; username: string; bio: string | null; avatar_url: string | null; isFollowing: boolean; followerCount: number }
+type Person = { id: string; username: string; bio: string | null; avatar_url: string | null; is_private: boolean; isFollowing: boolean; requestPending: boolean; followerCount: number }
 
 export default function PeoplePage() {
   const [userId, setUserId] = useState('')
   const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const supabase = createClient()
@@ -24,25 +26,61 @@ export default function PeoplePage() {
 
   const fetchPeople = async (uid: string) => {
     const supabase = createClient()
-    const { data: profiles } = await supabase.from('profiles').select('*').neq('id', uid)
-    const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', uid)
-    const { data: followerCounts } = await supabase.from('follows').select('following_id')
+    const [{ data: profiles, error: profilesError }, { data: follows, error: followsError }, { data: requests, error: requestsError }] = await Promise.all([
+      supabase.from('profiles').select('*').neq('id', uid),
+      supabase.from('follows').select('following_id').eq('follower_id', uid),
+      supabase.from('follow_requests').select('following_id').eq('follower_id', uid),
+    ])
+    if (profilesError || followsError || requestsError) {
+      const fetchError = profilesError || followsError || requestsError
+      console.error('Could not load people or follow requests:', fetchError)
+      setError('Could not load people. Apply the latest Supabase setup SQL and try again.')
+      setLoading(false)
+      return
+    }
+    setError('')
+    const { data: followerCounts, error: countError } = await supabase.from('follows').select('following_id')
+    if (countError) {
+      console.error('Could not load follower counts:', countError)
+      setError('Could not load follower counts. Please refresh and try again.')
+    }
     const followingIds = new Set(follows?.map(f => f.following_id) || [])
+    const requestIds = new Set(requests?.map(request => request.following_id) || [])
     const countMap: Record<string, number> = {}
     followerCounts?.forEach(f => { countMap[f.following_id] = (countMap[f.following_id] || 0) + 1 })
-    setPeople((profiles || []).map(p => ({ ...p, isFollowing: followingIds.has(p.id), followerCount: countMap[p.id] || 0 })))
+    setPeople((profiles || []).map(p => ({ ...p, isFollowing: followingIds.has(p.id), requestPending: requestIds.has(p.id), followerCount: countMap[p.id] || 0 })))
     setLoading(false)
   }
 
-  const toggleFollow = async (targetId: string, isFollowing: boolean) => {
+  const toggleFollow = async (person: Person) => {
     const supabase = createClient()
-    if (isFollowing) {
-      await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', targetId)
+    if (person.isFollowing) {
+      const { error } = await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', person.id)
+      if (error) {
+        console.error('Could not unfollow person:', error)
+        setError('Could not update your follow. Please try again.')
+      }
+    } else if (person.requestPending) {
+      const { error } = await supabase.from('follow_requests').delete().eq('follower_id', userId).eq('following_id', person.id)
+      if (error) {
+        console.error('Could not cancel follow request:', error)
+        setError('Could not cancel your request. Please try again.')
+      }
+    } else if (person.is_private) {
+      const { error } = await supabase.from('follow_requests').insert({ follower_id: userId, following_id: person.id })
+      if (error) {
+        console.error('Could not send follow request:', error)
+        setError('Could not send a follow request. Please try again.')
+      }
     } else {
-      await supabase.from('follows').insert({ follower_id: userId, following_id: targetId })
-      await insertNotification(supabase, { user_id: targetId, actor_id: userId, type: 'follow' })
+      const { error } = await supabase.from('follows').insert({ follower_id: userId, following_id: person.id })
+      if (error) {
+        console.error('Could not follow person:', error)
+        setError('Could not follow this person. Please try again.')
+      }
+      else await insertNotification(supabase, { user_id: person.id, actor_id: userId, type: 'follow' })
     }
-    fetchPeople(userId)
+    await fetchPeople(userId)
   }
 
   const filtered = people.filter(p => p.username.toLowerCase().includes(search.toLowerCase()))
@@ -61,6 +99,7 @@ export default function PeoplePage() {
       <Navbar activePage="people" />
       <main className="max-w-xl mx-auto py-6 px-4">
         <h1 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>People</h1>
+        {error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
 
         {/* Search */}
         <div className="relative mb-5">
@@ -83,11 +122,12 @@ export default function PeoplePage() {
                     <div key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                       <Avatar person={person} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{person.username}</p>
+                        <Link href={`/profile/${person.username}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
+                        {person.is_private && <span className="ml-1 text-[10px]">🔒</span>}
                         {person.bio && <p className="text-xs truncate mt-0.5" style={{ color: 'var(--muted)' }}>{person.bio}</p>}
                         <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{person.followerCount} followers</p>
                       </div>
-                      <button onClick={() => toggleFollow(person.id, true)}
+                      <button onClick={() => toggleFollow(person)}
                         className="text-xs font-medium px-4 py-2 rounded-xl border transition hover:bg-red-50 hover:text-red-500 hover:border-red-200"
                         style={{ color: 'var(--sub)', borderColor: '#E5E7EB' }}>
                         Following
@@ -106,14 +146,15 @@ export default function PeoplePage() {
                     <div key={person.id} className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                       <Avatar person={person} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{person.username}</p>
+                        <Link href={`/profile/${person.username}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
+                        {person.is_private && <span className="ml-1 text-[10px]">🔒</span>}
                         {person.bio && <p className="text-xs truncate mt-0.5" style={{ color: 'var(--muted)' }}>{person.bio}</p>}
                         <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{person.followerCount} followers</p>
                       </div>
-                      <button onClick={() => toggleFollow(person.id, false)}
+                      <button onClick={() => toggleFollow(person)}
                         className="text-xs font-semibold px-4 py-2 rounded-xl text-white transition hover:opacity-90 shadow-sm"
                         style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
-                        Follow
+                        {person.requestPending ? 'Requested' : person.is_private ? 'Request' : 'Follow'}
                       </button>
                     </div>
                   ))}

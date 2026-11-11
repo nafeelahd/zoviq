@@ -36,13 +36,40 @@ export async function POST(request: NextRequest) {
           cookiesToSet.push(...cookies)
         },
       },
+      global: {
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const controller = new AbortController()
+          const abortFromRequest = () => controller.abort()
+          if (init?.signal?.aborted) {
+            controller.abort()
+          } else {
+            init?.signal?.addEventListener('abort', abortFromRequest, { once: true })
+          }
+          const timeout = setTimeout(() => controller.abort(), 12000)
+          try {
+            return await fetch(input, { ...init, signal: controller.signal })
+          } finally {
+            clearTimeout(timeout)
+            init?.signal?.removeEventListener('abort', abortFromRequest)
+          }
+        },
+      },
     }
   )
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email: payload.email.trim(),
-    password: payload.password,
-  })
+  let error: Error | null
+  try {
+    ({ error } = await supabase.auth.signInWithPassword({
+      email: payload.email.trim(),
+      password: payload.password,
+    }))
+  } catch (requestError) {
+    console.error('Sign-in request failed:', requestError)
+    const timedOut = requestError instanceof Error && requestError.name === 'AbortError'
+    return NextResponse.json({
+      error: timedOut ? 'Sign-in service timed out. Please try again.' : 'Could not reach the sign-in service. Please try again.',
+    }, { status: 503 })
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 401 })

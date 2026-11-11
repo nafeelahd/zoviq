@@ -14,11 +14,14 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); setError('')
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
+        signal: controller.signal,
       })
       const result = await response.json() as { error?: string }
       if (!response.ok) {
@@ -29,8 +32,12 @@ export default function LoginPage() {
       window.location.replace('/feed')
     } catch (error) {
       console.error('Could not sign in:', error)
-      setError('Could not reach the sign-in service. Check your connection and try again.')
+      setError(error instanceof Error && error.name === 'AbortError'
+        ? 'Sign-in timed out. Check your connection and try again.'
+        : 'Could not reach the sign-in service. Check your connection and try again.')
       setLoading(false)
+    } finally {
+      clearTimeout(timeout)
     }
   }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
@@ -632,17 +633,20 @@ export default function MessagesPage() {
                 ) : people.length === 0 ? (
                   <div className="text-center p-8" style={{ color: 'var(--muted)' }}><p className="text-2xl mb-2">👥</p><p className="text-xs">No users yet</p></div>
                 ) : people.map(person => (
-                  <button key={person.id} onClick={() => setSelectedUser(person)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 transition text-left border-b"
+                  <div key={person.id} className="flex items-center gap-2 px-3 border-b"
                     style={{ background: selectedUser?.id === person.id ? '#EEF2FF' : 'transparent', borderColor: 'var(--border)', borderLeft: selectedUser?.id === person.id ? '3px solid #6366F1' : '3px solid transparent' }}>
-                    <Avatar person={person} size={10} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{person.username}</p>
+                    <Link href={`/profile/${encodeURIComponent(person.username)}`} aria-label={`View ${person.username} profile`}>
+                      <Avatar person={person} size={10} />
+                    </Link>
+                    <div className="flex-1 min-w-0 py-3.5">
+                      <Link href={`/profile/${encodeURIComponent(person.username)}`} className="text-sm font-semibold truncate hover:underline" style={{ color: 'var(--text)' }}>{person.username}</Link>
                       <p className="text-xs mt-0.5" style={{ color: isOnline(person.last_seen) ? '#10B981' : 'var(--muted)' }}>
                         {isOnline(person.last_seen) ? '● Online' : lastSeenLabel(person.last_seen)}
                       </p>
                     </div>
-                  </button>
+                    <button type="button" onClick={() => setSelectedUser(person)} aria-label={`Message ${person.username}`}
+                      className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-black/5" style={{ color: '#6366F1' }}>✉</button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -658,15 +662,17 @@ export default function MessagesPage() {
                         style={{ background: 'var(--hover-bg)', color: 'var(--text)' }}>
                         ←
                       </button>
-                      <Avatar person={selectedUser} size={9} />
-                      <div>
-                        <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>{selectedUser.username}</p>
+                      <Link href={`/profile/${encodeURIComponent(selectedUser.username)}`} className="flex items-center gap-3 group">
+                        <Avatar person={selectedUser} size={9} />
+                        <div>
+                        <p className="font-semibold text-sm group-hover:underline" style={{ color: 'var(--text)' }}>{selectedUser.username}</p>
                         <p className="text-xs" style={{ color: isOnline(selectedLastSeen) ? '#10B981' : 'var(--muted)' }}>
                           {isOnline(selectedLastSeen)
                             ? '● Online'
                             : lastSeenLabel(selectedLastSeen)}
                         </p>
                       </div>
+                      </Link>
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => startCall('audio')} disabled={startingCall}

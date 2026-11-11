@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import CameraCapture from '@/components/CameraCapture'
 import PostMedia from '@/components/PostMedia'
@@ -295,13 +296,15 @@ export default function Stories({ userId, email }: { userId: string; email: stri
 
             {/* Header */}
             <div className="absolute top-6 left-0 right-0 z-10 flex items-center gap-3 px-4">
-              <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
-                {viewingUser.avatar_url
-                  ? <img src={viewingUser.avatar_url} alt={viewingUser.username} className="w-full h-full object-cover" />
-                  : viewingUser.username[0].toUpperCase()}
-              </div>
-              <span className="text-white font-semibold text-sm">{isMyStory ? 'Your story' : viewingUser.username}</span>
+              <Link href={isMyStory ? '/profile' : `/profile/${encodeURIComponent(viewingUser.username)}`} className="flex items-center gap-2 min-w-0">
+                <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
+                  {viewingUser.avatar_url
+                    ? <img src={viewingUser.avatar_url} alt={viewingUser.username} className="w-full h-full object-cover" />
+                    : viewingUser.username[0].toUpperCase()}
+                </div>
+                <span className="text-white font-semibold text-sm hover:underline">{isMyStory ? 'Your story' : viewingUser.username}</span>
+              </Link>
               <span className="text-white text-opacity-70 text-xs">{timeLeft(currentStory.expires_at)} left</span>
               <div className="ml-auto flex items-center gap-3">
                 {isMyStory && (
@@ -395,7 +398,8 @@ export default function Stories({ userId, email }: { userId: string; email: stri
                   }
                 </div>
               </button>
-              <span className="text-xs truncate w-14 text-center" style={{ color: '#9CA3AF' }}>{userStories.username}</span>
+              <Link href={`/profile/${encodeURIComponent(userStories.username)}`} onClick={event => event.stopPropagation()}
+                className="text-xs truncate w-14 text-center hover:underline" style={{ color: '#9CA3AF' }}>{userStories.username}</Link>
             </div>
           ))}
 

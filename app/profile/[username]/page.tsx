@@ -52,11 +52,23 @@ export default function PublicProfilePage() {
       if (!active) return
       setViewerId(session.user.id)
 
-      const { data: foundProfile, error: profileError } = await supabase
+      let { data: foundProfile, error: profileError } = await supabase
         .from('profiles')
         .select('id, username, bio, avatar_url, is_private')
         .eq('username', username.toLowerCase())
         .maybeSingle()
+      if (profileError?.message.includes('is_private')) {
+        console.error('Private profile schema is not installed:', profileError)
+        const fallback = await supabase.from('profiles')
+          .select('id, username, bio, avatar_url')
+          .eq('username', username.toLowerCase())
+          .maybeSingle()
+        foundProfile = fallback.data ? { ...fallback.data, is_private: false } : null
+        profileError = fallback.error
+        if (!fallback.error && fallback.data) {
+          setError('Account privacy is not enabled yet. Ask the site owner to apply the latest Supabase setup SQL.')
+        }
+      }
       if (!active) return
       if (profileError || !foundProfile) {
         if (profileError) console.error('Could not load profile:', profileError)

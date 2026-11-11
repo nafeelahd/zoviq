@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import Link from 'next/link'
 
 type Notification = { id: string; type: string; read: boolean; created_at: string; actor_id: string; post_id: string | null; group_id: string | null; actor_username?: string }
 
@@ -81,24 +82,25 @@ export default function NotificationsPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--muted)' }}>New</p>
                 <div className="space-y-1.5">
                   {unread.map(n => (
-                    <a key={n.id} href={getLink(n)}
+                    <div key={n.id}
                       className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition hover:shadow-md cursor-pointer"
                       style={{ background: '#EEF2FF', borderColor: '#C7D2FE' }}>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
+                      <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }} aria-label={`View ${n.actor_username || 'user'} profile`}>
                         {(n.actor_username || 'S')[0].toUpperCase()}
-                      </div>
+                      </Link>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm" style={{ color: 'var(--text)' }}>
-                          <span className="font-semibold">{n.actor_username}</span> {getMessage(n.type)}
+                          <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="font-semibold hover:underline">{n.actor_username}</Link>{' '}
+                          <Link href={getLink(n)}>{getMessage(n.type)}</Link>
                         </p>
-                        <p className="text-xs mt-0.5" style={{ color: '#6366F1' }}>{timeAgo(n.created_at)}</p>
+                        <Link href={getLink(n)} className="text-xs mt-0.5 block" style={{ color: '#6366F1' }}>{timeAgo(n.created_at)}</Link>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{getIcon(n.type)}</span>
                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#6366F1' }} />
                       </div>
-                    </a>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -109,21 +111,22 @@ export default function NotificationsPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--muted)' }}>Earlier</p>
                 <div className="space-y-1.5">
                   {read.map(n => (
-                    <a key={n.id} href={getLink(n)}
+                    <div key={n.id}
                       className="flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition hover:shadow-md cursor-pointer"
                       style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }}>
+                      <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #6366F1, #EC4899)' }} aria-label={`View ${n.actor_username || 'user'} profile`}>
                         {(n.actor_username || 'S')[0].toUpperCase()}
-                      </div>
+                      </Link>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm" style={{ color: 'var(--text)' }}>
-                          <span className="font-semibold">{n.actor_username}</span> {getMessage(n.type)}
+                          <Link href={`/profile/${encodeURIComponent(n.actor_username || '')}`} className="font-semibold hover:underline">{n.actor_username}</Link>{' '}
+                          <Link href={getLink(n)}>{getMessage(n.type)}</Link>
                         </p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{timeAgo(n.created_at)}</p>
+                        <Link href={getLink(n)} className="text-xs mt-0.5 block" style={{ color: 'var(--muted)' }}>{timeAgo(n.created_at)}</Link>
                       </div>
                       <span className="text-lg flex-shrink-0">{getIcon(n.type)}</span>
-                    </a>
+                    </div>
                   ))}
                 </div>
               </div>

@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar'
 import Link from 'next/link'
 import PostMedia from '@/components/PostMedia'
 
-type Post = { id: string; content: string; image_url: string | null; video_url: string | null; created_at: string; user_id: string }
+type Post = { id: string; content: string; image_url: string | null; video_url: string | null; created_at: string; user_id: string; username?: string }
 type Profile = { id: string; username: string; bio: string | null; avatar_url: string | null; is_private: boolean }
 
 export default function SearchPage() {
@@ -38,7 +38,13 @@ export default function SearchPage() {
       supabase.from('posts').select('*').ilike('content', `%${q}%`).order('created_at', { ascending: false }).limit(20),
       supabase.from('profiles').select('*').ilike('username', `%${q}%`).limit(20),
     ])
-    setPosts(postsData || []); setPeople(peopleData || [])
+    const postUserIds = Array.from(new Set((postsData || []).map(post => post.user_id)))
+    const { data: postProfiles } = postUserIds.length
+      ? await supabase.from('profiles').select('id, username').in('id', postUserIds)
+      : { data: [] }
+    const usernameById = new Map(postProfiles?.map(profile => [profile.id, profile.username]) || [])
+    setPosts((postsData || []).map(post => ({ ...post, username: usernameById.get(post.user_id) || 'user' })))
+    setPeople(peopleData || [])
     setLoading(false)
   }
 
@@ -116,6 +122,7 @@ export default function SearchPage() {
                 {post.image_url && <PostMedia src={post.image_url} alt="post" className="w-full max-h-48 object-cover" />}
                 {post.video_url && <PostMedia src={post.video_url} alt="post video" video className="w-full max-h-48 bg-black" />}
                 <div className="p-4">
+                  <Link href={`/profile/${encodeURIComponent(post.username || '')}`} className="text-xs font-semibold hover:underline" style={{ color: '#6366F1' }}>@{post.username}</Link>
                   <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{highlight(post.content)}</p>
                   <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>{timeAgo(post.created_at)}</p>
                 </div>

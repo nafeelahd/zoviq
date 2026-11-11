@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import VideoEditor from '@/components/VideoEditor'
 import Stories from '@/components/Stories'
@@ -209,7 +210,9 @@ export default function FeedPage() {
         {/* Create post */}
         <div className="rounded-2xl border p-5 mb-5 shadow-sm" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex gap-3 mb-3">
-            <Avatar name={myProfile?.username || email} url={myProfile?.avatar_url} size={10} />
+            <Link href="/profile" aria-label="View your profile">
+              <Avatar name={myProfile?.username || email} url={myProfile?.avatar_url} size={10} />
+            </Link>
             <textarea value={content} onChange={e => setContent(e.target.value)}
               placeholder="What's on your mind?" rows={2} maxLength={500}
               className="flex-1 text-sm resize-none focus:outline-none bg-transparent pt-1"
@@ -276,9 +279,11 @@ export default function FeedPage() {
                   {/* Header */}
                   <div className="flex items-center justify-between p-4 pb-3">
                     <div className="flex items-center gap-3">
-                      <Avatar name={post.username || 'user'} url={post.avatar_url} size={10} />
+                      <Link href={`/profile/${encodeURIComponent(post.username || '')}`} aria-label={`View ${post.username || 'user'} profile`}>
+                        <Avatar name={post.username || 'user'} url={post.avatar_url} size={10} />
+                      </Link>
                       <div>
-                        <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>{post.username || email.split('@')[0]}</p>
+                        <Link href={`/profile/${encodeURIComponent(post.username || '')}`} className="text-sm font-bold hover:underline" style={{ color: 'var(--text)' }}>{post.username || email.split('@')[0]}</Link>
                         <p className="text-xs" style={{ color: 'var(--muted)' }}>{timeAgo(post.created_at)}</p>
                       </div>
                     </div>
@@ -331,7 +336,9 @@ export default function FeedPage() {
                         <div className="space-y-2 mb-3">
                           {post.comments.map(comment => (
                             <div key={comment.id} className="flex items-start gap-2">
-                              <Avatar name={post.username || 'user'} url={post.avatar_url} size={7} />
+                              <Link href={`/profile/${encodeURIComponent(post.username || '')}`} aria-label={`View ${post.username || 'user'} profile`}>
+                                <Avatar name={post.username || 'user'} url={post.avatar_url} size={7} />
+                              </Link>
                               <div className="flex-1 rounded-xl px-3 py-2" style={{ background: 'var(--bg)' }}>
                                 <p className="text-xs font-bold mb-0.5" style={{ color: 'var(--text)' }}>{post.username || email.split('@')[0]}</p>
                                 <p className="text-xs" style={{ color: 'var(--sub)' }}>{comment.content}</p>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import CallModal from '@/components/CallModal'
@@ -714,9 +715,9 @@ export default function GroupsPage() {
                     const isMe = msg.user_id === userId
                     return (
                       <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-2`}>
-                        {!isMe && <UserAvatar username={msg.username} size={8} />}
+                        {!isMe && <Link href={`/profile/${encodeURIComponent(msg.username)}`} aria-label={`View ${msg.username} profile`}><UserAvatar username={msg.username} size={8} /></Link>}
                         <div className="max-w-xs">
-                          {!isMe && <p className="text-xs mb-1 ml-1" style={{ color: 'var(--muted)' }}>{msg.username}</p>}
+                        {!isMe && <Link href={`/profile/${encodeURIComponent(msg.username)}`} className="text-xs mb-1 ml-1 hover:underline block" style={{ color: 'var(--muted)' }}>{msg.username}</Link>}
                           <div className={`overflow-hidden rounded-2xl text-sm shadow-sm ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm'}`}
                             style={isMe ? { background: 'linear-gradient(135deg, #6366F1, #EC4899)' } : { background: '#F3F4F6', color: 'var(--text)' }}>
                             {msg.image_url && <a href={msg.image_url} target="_blank" rel="noreferrer"><img src={msg.image_url} alt="Image attachment" className="max-h-64 max-w-full object-contain" /></a>}
@@ -894,8 +895,8 @@ export default function GroupsPage() {
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {members.map(member => (
               <div key={member.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--bg)' }}>
-                <UserAvatar username={member.username} avatar_url={member.avatar_url} size={10} />
-                <div className="flex-1"><p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{member.username}</p><p className="text-xs capitalize" style={{ color: 'var(--muted)' }}>{member.role}</p></div>
+                <Link href={`/profile/${encodeURIComponent(member.username)}`} aria-label={`View ${member.username} profile`}><UserAvatar username={member.username} avatar_url={member.avatar_url} size={10} /></Link>
+                <div className="flex-1"><Link href={`/profile/${encodeURIComponent(member.username)}`} className="text-sm font-semibold hover:underline" style={{ color: 'var(--text)' }}>{member.username}</Link><p className="text-xs capitalize" style={{ color: 'var(--muted)' }}>{member.role}</p></div>
                 {member.user_id === userId ? (
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#EEF2FF', color: '#6366F1' }}>You</span>
                 ) : isAdmin ? (
@@ -918,8 +919,8 @@ export default function GroupsPage() {
               <p className="text-center text-sm py-4" style={{ color: 'var(--muted)' }}>{userSearch ? 'No users found' : 'All users are already members'}</p>
             ) : nonMembers.map(user => (
               <div key={user.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--bg)' }}>
-                <UserAvatar username={user.username} avatar_url={user.avatar_url} size={10} />
-                <p className="flex-1 text-sm font-semibold" style={{ color: 'var(--text)' }}>{user.username}</p>
+                <Link href={`/profile/${encodeURIComponent(user.username)}`} aria-label={`View ${user.username} profile`}><UserAvatar username={user.username} avatar_url={user.avatar_url} size={10} /></Link>
+                <Link href={`/profile/${encodeURIComponent(user.username)}`} className="flex-1 text-sm font-semibold hover:underline" style={{ color: 'var(--text)' }}>{user.username}</Link>
                 <GradBtn onClick={() => addUserDirectly(user.id)} className="px-3 py-1.5 text-xs">Add</GradBtn>
               </div>
             ))}

@@ -40,7 +40,11 @@ export async function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/auth/login'
     loginUrl.search = ''
-    return NextResponse.redirect(loginUrl)
+    const redirect = NextResponse.redirect(loginUrl)
+    response.cookies.getAll().forEach(({ name, value, ...options }) => {
+      redirect.cookies.set(name, value, options)
+    })
+    return redirect
   }
 
   return response
